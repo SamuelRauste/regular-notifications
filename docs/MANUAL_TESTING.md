@@ -25,7 +25,7 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Trigger multiple simultaneous reminders and verify each remains independent.
 - [ ] Verify Done removes the notification, records completion, and preserves recurrence.
 - [ ] Verify Dismiss removes the notification, records dismissal, and preserves recurrence.
-- [ ] Verify “+1 day” removes the notification and does not shift the normal schedule.
+- [ ] Verify “+1 day” removes the notification, postpones only that displayed occurrence, and leaves the recurrence anchor and normal schedule unchanged.
 - [ ] Swipe a notification away and verify the documented dismissal behavior.
 
 ## Recovery and timing

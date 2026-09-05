@@ -51,7 +51,7 @@ are marked complete only after the relevant checks have been run.
 - [ ] Implement Done, Dismiss, and +1 day action receivers.
 - [ ] Record each event and remove the displayed notification.
 - [ ] Preserve normal schedule for Done/Dismiss.
-- [ ] Postpone the occurrence by one calendar day without moving the reminder's next normal occurrence.
+- [ ] Postpone only the displayed occurrence by one calendar day; do not change the reminder's recurrence anchor or normal schedule.
 - [ ] Implement notification swipe dismissal where Android reliably exposes it.
 - [ ] Add action-processing tests.
 
@@ -83,5 +83,5 @@ are marked complete only after the relevant checks have been run.
 - Room is the source of truth; alarms are derived state and are reconstructed after recovery events.
 - Minimum SDK target is 26 unless the installed toolchain gives a strong reason to change it.
 - Inexact one-shot alarms are the initial timing mechanism; exact-alarm access is intentionally not requested.
-- Phase 0 scaffold uses compileSdk/targetSdk 37, Android Gradle Plugin 9.1.1, Gradle 9.3.1, built-in Kotlin, and Compose BOM 2026.08.00.
-- The installed SDK command-line tool reports that `sdkmanager` is deprecated in favor of the newer `android` CLI. This is currently non-blocking because the required platform/build-tools packages are installed and Gradle verification passes.
+- Phase 0 scaffold uses compileSdk/targetSdk 37, Android Gradle Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin/Compose compiler plugin 2.3.21, and Compose BOM 2026.08.00.
+- The newer Android CLI is useful and preferred for agent-driven workflows. Modern `sdkmanager` from the Android SDK Command-Line Tools package remains documented and supported for installing SDK packages; a deprecation warning may refer to the legacy SDK Tools package or an older `sdkmanager` earlier on PATH.

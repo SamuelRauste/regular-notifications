@@ -53,10 +53,10 @@ anchored to the original schedule to avoid drift. If multiple occurrences were
 missed, delivery records the relevant current occurrence and schedules the
 first future occurrence instead of emitting a backlog of notifications.
 
-“+1 day” is an event-level postponement of the displayed occurrence. It does
-not change the reminder's normal recurring schedule. Done and Dismiss record an
-event and continue the normal schedule. Notification swipe dismissal will map
-to Dismiss only where Android exposes that reliably.
+The “+1 day” action postpones only the displayed occurrence. It does not change
+the reminder's recurrence anchor or normal recurring schedule. Done and Dismiss
+record an event and continue the normal schedule. Notification swipe dismissal
+will map to Dismiss only where Android exposes that reliably.
 
 ## Scheduling and identity
 

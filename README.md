@@ -37,7 +37,7 @@ Run from the repository root in PowerShell:
 The debug APK will be under `app/build/outputs/apk/debug/`.
 
 The current scaffold uses minSdk 26, compileSdk/targetSdk 37, Android Gradle
-Plugin 9.1.1, Gradle 9.3.1, built-in Kotlin, and Jetpack Compose Material 3.
+Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin, and Jetpack Compose Material 3.
 
 ## Run on a physical phone
 

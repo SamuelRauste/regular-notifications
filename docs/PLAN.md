@@ -13,7 +13,7 @@ are marked complete only after the relevant checks have been run.
 - [x] Install or expose JDK 17 and the Android SDK command-line/build components.
 - [x] Generate and verify the smallest Compose application project.
 - [x] Run `assembleDebug`, `test`, and `lint` after scaffolding.
-- [ ] Commit Phase 0 once verification passes and the worktree has no unrelated changes.
+- [x] Commit Phase 0 once verification passes and the worktree has no unrelated changes.
 
 ## Phase 1 — Persistence and recurrence
 

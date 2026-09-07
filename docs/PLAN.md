@@ -28,11 +28,11 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 2 — Reminder management UI
 
-- [ ] Implement list ViewModel and Material 3 reminder list.
-- [ ] Implement create/edit state and screen with validation.
-- [ ] Add enable/disable and delete confirmation flows.
-- [ ] Add loading, empty, error, and accessibility states.
-- [ ] Add Room and ViewModel tests where valuable.
+- [x] Implement an application-container-backed list ViewModel and Material 3 reminder list.
+- [x] Implement destination-scoped create/edit ViewModel state and a short form with inline validation.
+- [x] Add direct enable/disable and delete-confirmation flows.
+- [x] Add loading, empty, error, and accessibility states with standard touch targets and labels.
+- [x] Add presentation, ViewModel/Room, and meaningful Compose UI tests. They compile; execution requires an attached device or emulator.
 
 ## Phase 3 — Notification foundation
 
@@ -100,12 +100,15 @@ are marked complete only after the relevant checks have been run.
 - A Tomorrow revision changes whenever its occurrence instant, preview instant, or time zone changes, and stays stable for an unchanged reconciliation.
 - `RegularNotificationsApplication` owns one lazy application-scoped container with the Room database and repository; future UI and receivers must use it rather than creating database instances.
 - Room schema version 2 removes the obsolete duration anchor and interval unit/amount columns in favor of `intervalDays`. Because this is pre-release development data, opening an old local database deliberately uses destructive migration.
+- Phase 2 uses a small two-destination Navigation Compose graph so a create/edit ViewModel is scoped to its editor and is cleared after Save or Cancel. There is no DI framework.
+- The editor exposes only title, optional description, first date/time, enabled state, and `Every [X] days`; Tomorrow eligibility is automatic for `intervalDays >= 2` and is never a user setting.
 - Any asynchronous receiver work must use a receiver lifecycle mechanism such as `goAsync()`/`PendingResult.finish()`; unmanaged `onReceive()` coroutines are prohibited.
 - The main UI must be understandable in under one minute: direct controls, obvious labels, sensible defaults, few screens, and no unnecessary onboarding or advanced settings.
 
-## Phase 1 verification note
+## Phase 1 and Phase 2 verification note
 
-Phase 1 implementation is complete. The JVM suite, lint, debug APK, and
-Android-test APK compilation are verified. Instrumentation execution remains
+The simplified Every-X-days Phase 1 checkpoint passed the JVM suite, lint,
+debug APK, and Android-test APK compilation before Phase 2 began. The final
+Phase 2 verification passed the same checks. Instrumentation execution remains
 pending a usable physical device or emulator; the available adb process is not
 currently usable in this environment.

@@ -26,10 +26,9 @@ Room database       ReminderScheduler
 Room remains the source of truth. Android alarms and visible notifications are
 derived state and must be safe to cancel and recreate from stored reminders.
 
-The Phase 1 implementation adds persistence and pure Kotlin recurrence/state
-logic. It deliberately does not contain the Compose reminder UI, notification
-delivery, AlarmManager scheduling, or BroadcastReceiver implementation; those
-remain later phases.
+Phase 2 adds the Compose reminder-management UI on top of the persisted,
+pure-Kotlin recurrence/state model. AlarmManager scheduling, notification
+delivery, and BroadcastReceiver implementation remain later phases.
 
 ## Planned packages
 
@@ -38,12 +37,19 @@ remain later phases.
 - `scheduling`: `ReminderScheduler` and the `AlarmManager` implementation.
 - `notifications`: channel, notification factory, and action handling.
 - `receivers`: alarm delivery, notification actions, boot, and time/time-zone changes.
-- `ui`: list, editor, history, ViewModels, and Compose theme/screens.
+- `ui`: reminder list/editor models, ViewModels, screens, and Compose navigation.
 
 `RegularNotificationsApplication` owns one lazy `AppContainer` per app
 process. The container owns the Room database and repository. Future UI,
 alarm, boot/time, and notification-action components must obtain this shared
 container instead of opening their own Room database instances.
+
+The UI maps Room entities to small presentation models before rendering. A
+list ViewModel owns the `StateFlow` for loading, content, and errors. A separate
+editor ViewModel owns the short form and its validation state. Navigation has
+only two destinations: the reminder list and a create/edit editor. Popping the
+editor after Save or Cancel clears its destination-scoped ViewModel, preventing
+stale form state on a later edit.
 
 ## Reminder and recurrence decisions
 
@@ -134,6 +140,20 @@ normal due state. A same-target preview retains its revision only when its
 occurrence instant, preview instant, and zone are unchanged; any of those
 scheduling changes increments the revision.
 
+## Phase 2 user interface
+
+The main screen is one direct list. A card shows a reminder's title, optional
+description, `Every X days` label, next occurrence, enabled state, and Edit or
+Delete controls. The primary `+ Add` action and the empty-state button both
+open the same editor. Delete always requires a confirmation.
+
+The editor intentionally contains only title, optional description, first
+date/time, enabled state, and `Every [X] days`. New reminders begin at Every 1
+day with the next rounded hour as the initial first occurrence. It uses the
+platform date/time pickers and inline plain-language errors. Tomorrow previews
+need no configuration: the state model makes them eligible only for
+`intervalDays >= 2`.
+
 ## Scheduling and identity
 
 Every reminder gets individually derived request codes and/or intent data from
@@ -179,9 +199,10 @@ recurrence instances, revisions, or time zones.
 
 ## Testing strategy
 
-Pure recurrence and validation tests are ordinary JUnit tests. Room DAO tests
-cover persistence and event history. Scheduling tests verify stable identifiers,
-cancel/reschedule behavior, editing, deletion, and missed-occurrence handling.
-Action tests verify Done, Dismiss, postponement, and deletion races. AndroidX
-instrumentation tests will be added only where notification or lifecycle
-behavior cannot be meaningfully tested as pure Kotlin.
+Pure recurrence, validation, and presentation tests are ordinary JUnit tests.
+Room DAO tests cover persistence and event history. AndroidX tests cover
+repository-backed list/editor ViewModels and the high-value empty-state Compose
+path. Scheduling tests will verify stable identifiers, cancellation/reschedule
+behavior, editing, deletion, and missed-occurrence handling. Action tests will
+verify Done, Dismiss, postponement, and deletion races when those later phases
+are implemented.

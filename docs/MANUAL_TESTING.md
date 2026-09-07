@@ -11,11 +11,14 @@ a real notification or reboot should be run on a physical Android phone.
 
 ## Reminder lifecycle
 
+- [ ] Open the app with no reminders and verify the empty state and both Add actions are obvious.
 - [ ] Create reminders for Every 1 day, Every 2 days, Every 7 days, and Every 30 days.
+- [ ] Verify the editor shows only `Every [X] days`, with no interval-unit selector or Tomorrow setting.
+- [ ] Verify the first date/time defaults are sensible, platform pickers open, and Cancel does not save changes.
 - [ ] Verify validation for blank title, an interval below 1 day, and invalid date/time.
-- [ ] Edit an enabled reminder and confirm only its alarm changes.
+- [ ] Edit an enabled reminder and confirm only that reminder's displayed definition and next occurrence change.
 - [ ] Disable and re-enable a reminder.
-- [ ] Delete a reminder and confirm the deletion prompt, alarm cancellation, and notification cancellation.
+- [ ] Delete a reminder and confirm the deletion prompt and removal from the list. When scheduling exists, also verify alarm and notification cancellation.
 - [ ] Verify empty, loading, permission-denied, and error states.
 
 ## Phase 1 state semantics
@@ -39,7 +42,7 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Verify Dismiss removes the notification, records dismissal, and preserves recurrence.
 - [ ] Verify “+1 day” removes the notification, postpones only that displayed occurrence, and leaves the recurrence anchor and normal schedule unchanged.
 - [ ] Verify the Tomorrow preview says “Tomorrow: …”, has only one `Seen` action, and does not count as Done or Dismiss.
-- [ ] Deliver a Tomorrow notification a few minutes late, then press Seen; verify it is still acknowledged and records exactly one `TOMORROW_SEEN` event.
+- [ ] Deliver a Tomorrow notification slightly late, then press Seen; verify it is still acknowledged and records exactly one `TOMORROW_SEEN` event.
 - [ ] Verify acknowledging a Tomorrow preview prevents it from returning after process death, reboot, or rescheduling.
 - [ ] Verify an overdue/outstanding reminder suppresses its Tomorrow preview.
 - [ ] Swipe a notification away and verify the documented dismissal behavior.

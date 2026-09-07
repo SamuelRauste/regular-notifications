@@ -9,11 +9,11 @@ advertisements, or network access.
 
 ## Status
 
-Phase 1 is complete: the project has Room persistence, repository operations,
-and pure Kotlin recurrence/state logic for **Every X days**. The Compose UI,
-AlarmManager scheduling, notification delivery, and action receivers are
-intentionally not implemented yet. Android instrumentation tests compile but
-still need a usable phone or emulator to run.
+Phase 2 is complete: the app can create, view, edit, enable, disable, and
+delete local reminders through a short Compose/Material 3 interface. Every
+reminder uses **Every X days**. AlarmManager scheduling, notification delivery,
+and action receivers are intentionally not implemented yet. Android
+instrumentation tests compile but still need a usable phone or emulator to run.
 
 ## Prerequisites
 
@@ -52,6 +52,16 @@ does not create a Tomorrow preview; every 2 or more days can. A preview remains
 acknowledgeable after its delivery time until its actual reminder becomes due.
 All reminders follow the device's current local time zone.
 
+## Using the app
+
+The main screen is a simple reminder list. Each card shows its title, repeat
+schedule, next occurrence, status, and direct controls for enabling, editing,
+and deleting it. The `+ Add` button opens a short form: title, optional
+description, first date/time, and `Every [X] days`. New reminders default to
+Every 1 day. When notification delivery is added, Tomorrow previews will be
+automatic for intervals of 2 or more days; there is no preview setting in the
+form.
+
 ## Run on a physical phone
 
 With USB debugging enabled and the phone connected:
@@ -61,10 +71,11 @@ adb devices
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The app will request `POST_NOTIFICATIONS` at runtime on Android 13 and newer.
-Notification delivery also depends on Android's alarm and battery-management
-policies. The initial scheduler uses reasonably punctual inexact one-shot
-`AlarmManager` alarms and does not request exact-alarm special access.
+Later notification work will request `POST_NOTIFICATIONS` at runtime on Android
+13 and newer. Notification delivery will also depend on Android's alarm and
+battery-management policies. The planned scheduler uses reasonably punctual
+inexact one-shot `AlarmManager` alarms and does not request exact-alarm special
+access.
 
 Every-X-days recurrences preserve local wall-clock time across daylight-saving
 and time-zone changes. Android may delay alarms, especially in battery saver or

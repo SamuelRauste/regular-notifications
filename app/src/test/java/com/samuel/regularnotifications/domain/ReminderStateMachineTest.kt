@@ -329,6 +329,145 @@ class ReminderStateMachineTest {
         assertNull(afterTravel.outstandingDue)
     }
 
+    @Test
+    fun disabledOccurrencesAreSkippedAndTheOriginalAnchorRemains() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 9, 1, 9, 0),
+            intervalDays = 7,
+        )
+        val beforeDisable = ReminderStateMachine.initial(
+            definition,
+            now = instant("2026-09-01T08:00:00Z"),
+            zoneId = utc,
+        )
+
+        val skipped = ReminderStateMachine.skipDisabledOccurrences(
+            definition,
+            beforeDisable,
+            now = instant("2026-09-20T10:00:00Z"),
+            zoneId = utc,
+        )
+
+        assertEquals(2L, skipped.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, skipped.nextNormal.index)
+        assertEquals(
+            LocalDateTime.of(2026, 9, 22, 9, 0),
+            skipped.nextNormal.localDateTime,
+        )
+        assertNull(skipped.outstandingDue)
+        assertNull(skipped.tomorrowPreview)
+
+        val resumed = ReminderStateMachine.reconcile(
+            definition,
+            skipped,
+            now = instant("2026-09-20T10:00:00Z"),
+            zoneId = utc,
+        )
+
+        assertEquals(3L, resumed.nextNormal.index)
+        assertNull(resumed.outstandingDue)
+        assertEquals(3L, resumed.tomorrowPreview?.normalOccurrenceIndex)
+    }
+
+    @Test
+    fun repeatedDisabledReconciliationIsIdempotentAndDoesNotCreateHistoryState() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 9, 1, 9, 0),
+            intervalDays = 7,
+        )
+        val initial = ReminderStateMachine.initial(
+            definition,
+            now = instant("2026-09-01T08:00:00Z"),
+            zoneId = utc,
+        )
+        val firstSkip = ReminderStateMachine.skipDisabledOccurrences(
+            definition,
+            initial,
+            now = instant("2026-09-20T10:00:00Z"),
+            zoneId = utc,
+        )
+        val repeatedSkip = ReminderStateMachine.skipDisabledOccurrences(
+            definition,
+            firstSkip,
+            now = instant("2026-09-20T10:00:00Z"),
+            zoneId = utc,
+        )
+        val afterMoreDisabledTime = ReminderStateMachine.skipDisabledOccurrences(
+            definition,
+            repeatedSkip,
+            now = instant("2026-09-30T10:00:00Z"),
+            zoneId = utc,
+        )
+
+        assertEquals(firstSkip, repeatedSkip)
+        assertEquals(4L, afterMoreDisabledTime.lastResolvedNormalOccurrenceIndex)
+        assertEquals(5L, afterMoreDisabledTime.nextNormal.index)
+        assertNull(afterMoreDisabledTime.outstandingDue)
+        assertNull(afterMoreDisabledTime.tomorrowPreview)
+    }
+
+    @Test
+    fun disabledOccurrencesStaySkippedAfterTimezoneChange() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 9, 1, 9, 0),
+            intervalDays = 7,
+        )
+        val initial = ReminderStateMachine.initial(
+            definition,
+            now = instant("2026-09-01T08:00:00Z"),
+            zoneId = utc,
+        )
+        val skipped = ReminderStateMachine.skipDisabledOccurrences(
+            definition,
+            initial,
+            now = instant("2026-09-20T10:00:00Z"),
+            zoneId = utc,
+        )
+
+        val afterTravel = ReminderStateMachine.reconcile(
+            definition,
+            skipped,
+            now = instant("2026-09-20T10:00:00Z"),
+            zoneId = ZoneId.of("Asia/Tokyo"),
+        )
+
+        assertEquals(2L, afterTravel.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, afterTravel.nextNormal.index)
+        assertEquals(
+            LocalDateTime.of(2026, 9, 22, 9, 0),
+            afterTravel.nextNormal.localDateTime,
+        )
+        assertNull(afterTravel.outstandingDue)
+    }
+
+    @Test
+    fun disabledOccurrencesUseTheLocalWallClockAcrossDst() {
+        val helsinki = ZoneId.of("Europe/Helsinki")
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 3, 22, 9, 0),
+            intervalDays = 7,
+        )
+        val initial = ReminderStateMachine.initial(
+            definition,
+            now = instant("2026-03-22T06:00:00Z"),
+            zoneId = helsinki,
+        )
+
+        val skipped = ReminderStateMachine.skipDisabledOccurrences(
+            definition,
+            initial,
+            now = instant("2026-04-06T07:00:00Z"),
+            zoneId = helsinki,
+        )
+
+        assertEquals(2L, skipped.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, skipped.nextNormal.index)
+        assertEquals(
+            LocalDateTime.of(2026, 4, 12, 9, 0),
+            skipped.nextNormal.localDateTime,
+        )
+    }
+
     private fun definition(
         anchor: LocalDateTime,
         intervalDays: Int = 1,

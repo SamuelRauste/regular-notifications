@@ -19,10 +19,7 @@ object ReminderStateMachine {
         zoneId: ZoneId,
     ): ReminderScheduleState {
         val lastResolvedIndex = current?.lastResolvedNormalOccurrenceIndex
-        val minimumIndex = lastResolvedIndex?.let {
-            require(it < Long.MAX_VALUE) { "Resolved occurrence index exceeded the supported range." }
-            it + 1
-        } ?: 0
+        val minimumIndex = nextIndexAfter(lastResolvedIndex ?: -1)
         val window = RecurrenceCalculator.window(definition, now, zoneId, minimumIndex)
         val latestDue = window.latestDue
         val existingDue = current?.outstandingDue
@@ -50,6 +47,37 @@ object ReminderStateMachine {
             outstandingDue = outstandingDue,
             tomorrowPreview = tomorrowPreview,
             lastResolvedNormalOccurrenceIndex = lastResolvedIndex,
+        )
+    }
+
+    /**
+     * Advances the resolved/skipped cursor over every occurrence that is due
+     * while a reminder is intentionally disabled. No user event is recorded:
+     * these occurrences never produced a notification for the user to resolve.
+     */
+    fun skipDisabledOccurrences(
+        definition: ReminderDefinition,
+        current: ReminderScheduleState,
+        now: Instant,
+        zoneId: ZoneId,
+    ): ReminderScheduleState {
+        val latestDue = RecurrenceCalculator.window(definition, now, zoneId).latestDue
+        val latestSkippedIndex = max(
+            current.lastResolvedNormalOccurrenceIndex ?: -1,
+            latestDue?.index ?: -1,
+        )
+        val nextNormal = RecurrenceCalculator.window(
+            definition = definition,
+            now = now,
+            zoneId = zoneId,
+            minimumIndex = nextIndexAfter(latestSkippedIndex),
+        ).firstFuture
+
+        return ReminderScheduleState(
+            nextNormal = nextNormal,
+            outstandingDue = null,
+            tomorrowPreview = null,
+            lastResolvedNormalOccurrenceIndex = latestSkippedIndex.takeIf { it >= 0 },
         )
     }
 
@@ -185,4 +213,10 @@ object ReminderStateMachine {
             postponementCount = 0,
             revision = revision,
         )
+
+    private fun nextIndexAfter(index: Long): Long {
+        if (index < 0) return 0
+        require(index < Long.MAX_VALUE) { "Occurrence index exceeded the supported range." }
+        return index + 1
+    }
 }

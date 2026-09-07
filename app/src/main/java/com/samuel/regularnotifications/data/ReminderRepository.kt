@@ -94,6 +94,24 @@ class ReminderRepository(
         )
         outstandingDueDao.deleteByReminderId(id)
         tomorrowPreviewDao.deleteByReminderId(id)
+
+        // The editor can also re-enable a reminder. Its edited schedule is a
+        // new definition, so use a fresh cursor while skipping any occurrences
+        // already past rather than recovering them as enabled missed work.
+        if (!existing.enabled && input.enabled) {
+            val skipped = ReminderStateMachine.skipDisabledOccurrences(
+                definition = definition,
+                current = ReminderScheduleState(
+                    nextNormal = nextNormal,
+                    outstandingDue = null,
+                    tomorrowPreview = null,
+                    lastResolvedNormalOccurrenceIndex = null,
+                ),
+                now = now,
+                zoneId = zoneId,
+            )
+            persistSchedule(requireNotNull(reminderDao.getById(id)), skipped, now, zoneId)
+        }
         reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId)
         RepositoryActionResult.APPLIED
     }
@@ -105,16 +123,27 @@ class ReminderRepository(
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
         val existing = reminderDao.getById(id) ?: return@withTransaction RepositoryActionResult.NOT_FOUND
-        val updated = existing.copy(
-            enabled = enabled,
-            modifiedAtEpochMillis = now.toEpochMilli(),
-        )
-        reminderDao.update(updated)
-        if (enabled) {
-            reconcileStored(updated, now, zoneId)
+        if (existing.enabled == enabled) {
+            reconcileStored(existing, now, zoneId)
         } else {
-            outstandingDueDao.deleteByReminderId(id)
-            tomorrowPreviewDao.deleteByReminderId(id)
+            val skipped = ReminderStateMachine.skipDisabledOccurrences(
+                definition = existing.toDefinition(),
+                current = loadState(existing),
+                now = now,
+                zoneId = zoneId,
+            )
+            val updated = existing.copy(
+                enabled = enabled,
+                modifiedAtEpochMillis = now.toEpochMilli(),
+            )
+            reminderDao.update(updated)
+            persistSchedule(updated, skipped, now, zoneId)
+
+            // Reconcile after enabling so the next future occurrence can get
+            // its normal derived state (for example, a new Tomorrow preview).
+            if (enabled) {
+                reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId)
+            }
         }
         RepositoryActionResult.APPLIED
     }
@@ -274,11 +303,11 @@ class ReminderRepository(
         val state = if (reminder.enabled) {
             ReminderStateMachine.reconcile(definition, current, now, zoneId)
         } else {
-            ReminderScheduleState(
-                nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId),
-                outstandingDue = null,
-                tomorrowPreview = null,
-                lastResolvedNormalOccurrenceIndex = reminder.lastResolvedNormalOccurrenceIndex,
+            ReminderStateMachine.skipDisabledOccurrences(
+                definition = definition,
+                current = current,
+                now = now,
+                zoneId = zoneId,
             )
         }
         persistSchedule(reminder, state, now, zoneId)

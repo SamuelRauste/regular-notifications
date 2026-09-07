@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,9 @@ fun ReminderListScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddReminder,
+                modifier = Modifier.semantics {
+                    contentDescription = "Add reminder"
+                },
             ) { Text("+ Add") }
         },
     ) { innerPadding ->
@@ -258,7 +262,7 @@ private fun ReminderCard(
                 }
             }
             Text(
-                text = "${reminder.recurrence} · Next: ${reminder.nextOccurrence}",
+                text = reminder.scheduleSummary,
                 style = MaterialTheme.typography.bodyMedium,
             )
             Row(
@@ -274,7 +278,13 @@ private fun ReminderCard(
                             role = Role.Switch,
                             onValueChange = onSetEnabled,
                         )
-                        .semantics(mergeDescendants = true) {},
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = if (reminder.enabled) {
+                                "Disable ${reminder.title}"
+                            } else {
+                                "Enable ${reminder.title}"
+                            }
+                        },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(if (reminder.enabled) "Enabled" else "Disabled")
@@ -285,10 +295,20 @@ private fun ReminderCard(
                     )
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = onEdit) {
+                    TextButton(
+                        onClick = onEdit,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Edit ${reminder.title}"
+                        },
+                    ) {
                         Text("Edit")
                     }
-                    TextButton(onClick = onDelete) {
+                    TextButton(
+                        onClick = onDelete,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Delete ${reminder.title}"
+                        },
+                    ) {
                         Text("Delete")
                     }
                 }

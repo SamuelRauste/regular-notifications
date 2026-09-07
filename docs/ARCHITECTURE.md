@@ -66,6 +66,13 @@ multiple occurrences were missed, delivery records the relevant current
 occurrence and schedules the first future occurrence instead of emitting a
 backlog of notifications.
 
+Disabling a reminder pauses delivery completely. Occurrences that become due
+while it is disabled are skipped, not recovered later as overdue work. When the
+reminder is disabled, re-enabled, or reconciled after a restart, the skipped
+cursor advances to the latest due logical occurrence and the next future
+occurrence is calculated from the original anchor. The skipped occurrences do
+not create Done, Dismiss, or other history events.
+
 The “+1 day” action postpones only the displayed occurrence. It does not change
 the reminder's recurrence anchor or normal recurring schedule. Done and Dismiss
 record an event and continue the normal schedule. Notification swipe dismissal
@@ -90,10 +97,14 @@ The schema is deliberately limited to four conceptual tables:
 | --- | --- | --- |
 | Reminder definition / recurrence anchor | `reminders` row with stable ID, title, description, enabled flag, local anchor date/time, `intervalDays`, and timestamps | The anchor and interval are never changed by notification actions. |
 | Current calculated next normal recurrence | Cached normal occurrence index, epoch instant, and last calculation zone on the reminder row | It is derived from the definition and recalculated after recovery/time-zone changes. |
-| Resolved normal-occurrence cursor | Highest normal occurrence index already resolved by Done/Dismiss on the reminder row | It prevents an already resolved past occurrence from being recreated without changing the recurrence anchor or normal schedule. |
+| Resolved/skipped normal-occurrence cursor | Highest normal occurrence index resolved by Done/Dismiss or skipped while disabled on the reminder row | It prevents resolved or intentionally skipped occurrences from being recreated without changing the recurrence anchor or normal schedule. |
 | Outstanding due state | One `outstanding_due_states` row keyed by reminder ID, containing the latest contributing normal occurrence index, due instant, optional postponed-until instant, postponement count, and revision | There is never more than one unresolved due state or normal actionable notification for a reminder. |
 | Tomorrow preview state | One `tomorrow_previews` row keyed by reminder ID, containing the target normal occurrence index, occurrence/preview instants, zone, acknowledgement, and revision | There is never more than one preview for a reminder; it is suppressed while that reminder has an outstanding due state and is never created for an every-1-day reminder. |
 | Reminder event/history | Append-only `reminder_events` rows with reminder ID, logical occurrence index, action, times, and optional postponement time | Done, Dismiss, +1 day, and Seen are auditable without changing the recurrence definition. |
+
+The existing `lastResolvedNormalOccurrenceIndex` column is intentionally reused
+as this resolved/skipped cursor. No new Room field or schema version is needed;
+the name remains for compatibility with the Phase 1 schema.
 
 The normal occurrence index is a stable zero-based logical instance derived
 from the original anchor. It is used to distinguish an occurrence in history
@@ -108,8 +119,11 @@ never create another due row or move the normal pointer. The postponed time is
 calculated in the current local zone using a calendar-day advance, based on the
 currently displayed due time (or now when an overdue state is being postponed).
 Resolving the due state removes that row, records the action, and advances only
-the resolved-occurrence cursor; the normal pointer remains the canonical first
-future occurrence.
+the resolved/skipped occurrence cursor; the normal pointer remains the
+canonical first future occurrence. Disabling also removes due and preview rows
+and advances this same cursor through occurrences already due at that point,
+without recording history. Re-enabling then reconciles only the next future
+anchored occurrence.
 
 Stable notification identities are derived from `(reminderId, kind)`, with
 separate namespaces for `DUE` and `TOMORROW`. Stable alarm/PendingIntent

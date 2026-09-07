@@ -33,6 +33,7 @@ are marked complete only after the relevant checks have been run.
 - [x] Add direct enable/disable and delete-confirmation flows.
 - [x] Add loading, empty, error, and accessibility states with standard touch targets and labels.
 - [x] Add presentation, ViewModel/Room, and meaningful Compose UI tests. They compile; execution requires an attached device or emulator.
+- [x] Complete the pre-Phase 3 corrective pass: show disabled reminders as paused, make card controls reminder-specific to accessibility services, and skip occurrences that pass while delivery is disabled.
 
 ## Phase 3 — Notification foundation
 
@@ -94,7 +95,10 @@ are marked complete only after the relevant checks have been run.
 - The newer Android CLI is useful and preferred for agent-driven workflows. Modern `sdkmanager` from the Android SDK Command-Line Tools package remains documented and supported for installing SDK packages; a deprecation warning may refer to the legacy SDK Tools package or an older `sdkmanager` earlier on PATH.
 - Every-X-days schedules use the device's current time zone and preserve the original local calendar anchor and wall-clock time.
 - There is one persisted outstanding due state and one persisted Tomorrow preview state per reminder. Normal recurrence remains canonical; postponed state is auxiliary and can be collapsed when a newer normal occurrence becomes due.
-- The reminder stores a resolved normal-occurrence cursor so Done/Dismiss cannot recreate the same occurrence after recovery or a time-zone change; this cursor does not alter the recurrence anchor.
+- The reminder stores one resolved/skipped normal-occurrence cursor so Done/Dismiss cannot recreate resolved occurrences and disabled-period occurrences cannot reappear after recovery or a time-zone change; this cursor does not alter the recurrence anchor and does not create history for skipped occurrences.
+- Disabled reminders do not accumulate missed occurrences. Re-enabling resumes at the first future occurrence on the original Every-X-days schedule; it does not restart the schedule from the re-enable date.
+- The existing `lastResolvedNormalOccurrenceIndex` column is reused as the resolved/skipped cursor; no new Room field or schema version is required.
+- Disabled reminder cards show `Every X days · Paused` instead of a cached `Next:` date. Edit, delete, and enable/disable controls include the reminder title in their accessibility semantics while keeping the visible labels short.
 - Tomorrow previews are acknowledged per logical normal occurrence and use one `Seen` action. They are suppressed when the reminder is already due and are not replayed when obsolete after recovery.
 - Every-1-day reminders never create Tomorrow preview state or Tomorrow notifications. For eligible schedules, an existing preview remains current after `previewAt` until Seen, supersession, or the actual occurrence becoming due; a missing past preview is not replayed during recovery.
 - A Tomorrow revision changes whenever its occurrence instant, preview instant, or time zone changes, and stays stable for an unchanged reconciliation.

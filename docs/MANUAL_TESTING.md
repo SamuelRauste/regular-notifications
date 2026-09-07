@@ -18,6 +18,8 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Verify validation for blank title, an interval below 1 day, and invalid date/time.
 - [ ] Edit an enabled reminder and confirm only that reminder's displayed definition and next occurrence change.
 - [ ] Disable and re-enable a reminder.
+- [ ] Disable a reminder before an occurrence, wait until it has passed, and verify the disabled card says `Paused` instead of showing a stale `Next:` date.
+- [ ] Re-enable it after one or several anchored occurrences have passed and verify no old notification/due state appears; the next occurrence is the next future date on the original schedule.
 - [ ] Delete a reminder and confirm the deletion prompt and removal from the list. When scheduling exists, also verify alarm and notification cancellation.
 - [ ] Verify empty, loading, permission-denied, and error states.
 
@@ -32,6 +34,7 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Verify event history records Done, Dismiss, +1 day, and Tomorrow Seen independently of the recurrence definition.
 - [ ] Verify an every-1-day reminder never creates a Tomorrow notification, even after restart, edit, or rescheduling.
 - [ ] Verify an eligible non-daily reminder creates at most one Tomorrow preview.
+- [ ] Verify disabled-period occurrences do not create fake Done/Dismiss history events and repeated reconciliation remains skipped.
 
 ## Notifications and actions
 
@@ -51,6 +54,7 @@ a real notification or reboot should be run on a physical Android phone.
 
 - [ ] Reboot the device and verify enabled reminders are rescheduled.
 - [ ] Change the device time zone and verify the intended local wall-clock behavior.
+- [ ] Change the device time zone after re-enabling a reminder and verify skipped disabled-period occurrences do not return, while the original logical index/anchor remains intact.
 - [ ] Verify a daily 09:00 reminder remains 09:00 after changing from Finland to Japan time.
 - [ ] Verify Every 7 days remains anchored to the original local calendar date/time after a Finland-to-Japan time-zone change.
 - [ ] Verify only relevant future Tomorrow previews remain after recovery; obsolete previews are not replayed.

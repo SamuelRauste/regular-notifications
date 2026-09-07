@@ -19,6 +19,13 @@ data class ReminderListItem(
 ) {
     val recurrence: String
         get() = everyDaysLabel(intervalDays)
+
+    val scheduleSummary: String
+        get() = if (enabled) {
+            "$recurrence · Next: $nextOccurrence"
+        } else {
+            "$recurrence · Paused"
+        }
 }
 
 data class ReminderListUiState(

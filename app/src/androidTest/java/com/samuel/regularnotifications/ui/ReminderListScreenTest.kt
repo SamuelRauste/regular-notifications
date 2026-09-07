@@ -2,7 +2,9 @@ package com.samuel.regularnotifications.ui
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,5 +40,40 @@ class ReminderListScreenTest {
         composeRule.onNodeWithText("Add one to get started.").assertIsDisplayed()
         composeRule.onNodeWithText("Add reminder").performClick()
         composeRule.runOnIdle { assertTrue(addTapped) }
+    }
+
+    @Test
+    fun reminderCardUsesPausedSummaryAndReminderSpecificControlSemantics() {
+        composeRule.setContent {
+            MaterialTheme {
+                ReminderListScreen(
+                    uiState = ReminderListUiState(
+                        isLoading = false,
+                        reminders = listOf(
+                            ReminderListItem(
+                                id = 7,
+                                title = "Take out trash",
+                                description = null,
+                                enabled = false,
+                                intervalDays = 7,
+                                nextOccurrence = "Tue 10 Sep, 09:00",
+                            ),
+                        ),
+                    ),
+                    onAddReminder = {},
+                    onEditReminder = {},
+                    onSetEnabled = { _, _ -> },
+                    onDeleteReminder = {},
+                    onRetry = {},
+                    onDismissError = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Every 7 days · Paused").assertIsDisplayed()
+        composeRule.onNodeWithText("Every 7 days · Next: Tue 10 Sep, 09:00").assertDoesNotExist()
+        composeRule.onNodeWithContentDescription("Edit Take out trash").assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Delete Take out trash").assertHasClickAction()
+        composeRule.onNodeWithContentDescription("Enable Take out trash").assertHasClickAction()
     }
 }

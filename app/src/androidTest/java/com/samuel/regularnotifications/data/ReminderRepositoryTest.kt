@@ -174,23 +174,93 @@ class ReminderRepositoryTest {
     }
 
     @Test
-    fun disablingRetainsTheReminderButClearsDerivedScheduleState() = runBlocking {
-        val reminderId = repository.createReminder(input(), utc, now)
+    fun disablingSkipsTheDisabledPeriodWithoutCreatingHistoryEvents() = runBlocking {
+        val disabledAt = Instant.parse("2026-09-01T08:00:00Z")
+        val reenabledAt = Instant.parse("2026-09-20T10:00:00Z")
+        val reminderId = repository.createReminder(
+            input().copy(
+                firstOccurrence = LocalDateTime.of(2026, 9, 1, 9, 0),
+                intervalDays = 7,
+            ),
+            utc,
+            disabledAt,
+        )
 
         assertEquals(
             RepositoryActionResult.APPLIED,
-            repository.setEnabled(reminderId, enabled = false, zoneId = utc, now = now),
+            repository.setEnabled(reminderId, enabled = false, zoneId = utc, now = disabledAt),
         )
         assertEquals(false, database.reminderDao().getById(reminderId)!!.enabled)
         assertNull(database.outstandingDueDao().getByReminderId(reminderId))
         assertNull(database.tomorrowPreviewDao().getByReminderId(reminderId))
+        assertNull(database.reminderDao().getById(reminderId)!!.lastResolvedNormalOccurrenceIndex)
 
         assertEquals(
             RepositoryActionResult.APPLIED,
-            repository.setEnabled(reminderId, enabled = true, zoneId = utc, now = now),
+            repository.setEnabled(reminderId, enabled = true, zoneId = utc, now = reenabledAt),
         )
-        assertEquals(true, database.reminderDao().getById(reminderId)!!.enabled)
-        assertNotNull(database.outstandingDueDao().getByReminderId(reminderId))
+        val resumed = database.reminderDao().getById(reminderId)!!
+        assertEquals(true, resumed.enabled)
+        assertEquals(2L, resumed.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, resumed.nextNormalOccurrenceIndex)
+        assertEquals(
+            Instant.parse("2026-09-22T09:00:00Z").toEpochMilli(),
+            resumed.nextNormalOccurrenceEpochMillis,
+        )
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+
+        repository.reconcileAll(zoneId = utc, now = reenabledAt)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(2L, database.reminderDao().getById(reminderId)!!.lastResolvedNormalOccurrenceIndex)
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+
+        repository.reconcileReminder(
+            reminderId,
+            zoneId = ZoneId.of("Asia/Tokyo"),
+            now = reenabledAt,
+        )
+        val afterTravel = database.reminderDao().getById(reminderId)!!
+        assertEquals(2L, afterTravel.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, afterTravel.nextNormalOccurrenceIndex)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+    }
+
+    @Test
+    fun editingDisabledReminderAsEnabledAlsoSkipsPastOccurrences() = runBlocking {
+        val disabledAt = Instant.parse("2026-09-01T08:00:00Z")
+        val reenabledAt = Instant.parse("2026-09-20T10:00:00Z")
+        val reminderId = repository.createReminder(
+            input().copy(
+                firstOccurrence = LocalDateTime.of(2026, 9, 1, 9, 0),
+                intervalDays = 7,
+            ),
+            utc,
+            disabledAt,
+        )
+        repository.setEnabled(reminderId, enabled = false, zoneId = utc, now = disabledAt)
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.updateReminder(
+                reminderId,
+                input().copy(
+                    enabled = true,
+                    firstOccurrence = LocalDateTime.of(2026, 9, 1, 9, 0),
+                    intervalDays = 7,
+                ),
+                zoneId = utc,
+                now = reenabledAt,
+            ),
+        )
+
+        val resumed = database.reminderDao().getById(reminderId)!!
+        assertTrue(resumed.enabled)
+        assertEquals(2L, resumed.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, resumed.nextNormalOccurrenceIndex)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
     }
 
     private fun input() = ReminderInput(

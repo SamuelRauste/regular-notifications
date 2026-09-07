@@ -17,6 +17,7 @@ data class ReminderEntity(
     val nextNormalOccurrenceIndex: Long,
     val nextNormalOccurrenceEpochMillis: Long,
     val nextNormalZoneId: String,
+    /** Highest normal occurrence resolved by the user or skipped while disabled. */
     val lastResolvedNormalOccurrenceIndex: Long?,
     val createdAtEpochMillis: Long,
     val modifiedAtEpochMillis: Long,

@@ -52,6 +52,12 @@ does not create a Tomorrow preview; every 2 or more days can. A preview remains
 acknowledgeable after its delivery time until its actual reminder becomes due.
 All reminders follow the device's current local time zone.
 
+Disabling a reminder pauses delivery completely. Its card shows `Paused`
+instead of a possibly stale `Next:` date. Occurrences that pass while it is
+disabled are ignored without history events; re-enabling resumes at the next
+future occurrence on the original Every-X-days anchor rather than creating a
+backlog or restarting the schedule.
+
 ## Using the app
 
 The main screen is a simple reminder list. Each card shows its title, repeat

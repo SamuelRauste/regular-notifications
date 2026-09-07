@@ -1,15 +1,17 @@
 # Regular Notifications
 
 An offline Android reminder app for recurring notifications with Done, Dismiss,
-and “+1 day” actions. The app will keep reminders and their history locally on
-the device. It will not use accounts, a server, analytics, advertisements, or
-network access.
+and “+1 day” actions. It will also provide a single “Tomorrow: …” preview for
+the next upcoming occurrence. The app will keep reminders and their history
+locally on the device. It will not use accounts, a server, analytics,
+advertisements, or network access.
 
 ## Status
 
-Phase 0 is complete: the project has a verified single-module Compose
-application scaffold. The debug APK assembles, the JVM unit test passes, and
-lint passes. Reminder functionality is intentionally not implemented yet.
+Phase 1 persistence and recurrence work is in progress: the project now has
+Room persistence, repository operations, pure Kotlin recurrence/state logic,
+and automated tests. The Compose UI, AlarmManager scheduling, notification
+delivery, and action receivers are intentionally not implemented yet.
 
 ## Prerequisites
 
@@ -36,8 +38,14 @@ Run from the repository root in PowerShell:
 
 The debug APK will be under `app/build/outputs/apk/debug/`.
 
-The current scaffold uses minSdk 26, compileSdk/targetSdk 37, Android Gradle
+The current project uses minSdk 26, compileSdk/targetSdk 37, Android Gradle
 Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin, and Jetpack Compose Material 3.
+
+The reminder model treats the normal recurrence as canonical. A displayed
+occurrence can be postponed by one calendar day without changing the recurrence
+anchor or normal future schedule. There is at most one unresolved due state and
+one Tomorrow preview per reminder. Day/week schedules follow the device's
+current local time zone; minute/hour schedules remain duration-based.
 
 ## Run on a physical phone
 

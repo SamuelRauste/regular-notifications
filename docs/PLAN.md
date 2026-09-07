@@ -17,11 +17,14 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 1 — Persistence and recurrence
 
-- [ ] Create the single application module using Kotlin, Compose, Material 3, Room, coroutines, and Java time.
-- [ ] Implement reminder and reminder-event entities, DAOs, database, repository, and Flow/StateFlow access.
-- [ ] Implement a pure Kotlin recurrence calculator for minute/hour duration recurrence and day/week wall-clock recurrence.
-- [ ] Define anchoring, missed-occurrence, time-zone, and postponement semantics.
-- [ ] Add unit tests for all recurrence units, past/future starts, missed occurrences, date boundaries, DST, drift, anchoring, postponement, and validation.
+- [x] Document the reminder definition, normal occurrence, outstanding due, postponement, event history, Tomorrow preview, identity, and deduplication model.
+- [x] Configure the single application module using Kotlin, Compose, Material 3, Room, coroutines, and Java time.
+- [x] Implement reminder and reminder-event entities, DAOs, database, repository, and Flow access. StateFlow remains a Phase 2 ViewModel concern.
+- [x] Implement a pure Kotlin recurrence calculator for minute/hour duration recurrence and day/week wall-clock recurrence.
+- [x] Define anchoring, missed-occurrence, time-zone, and postponement semantics.
+- [x] Implement pure Kotlin state transitions for recovery, due-state merging, repeated +1 day, resolution, and Tomorrow preview acknowledgement.
+- [x] Add unit tests for all recurrence units, past/future starts, missed occurrences, date boundaries, DST, time-zone changes, drift, anchoring, postponement, validation, collisions, and idempotency.
+- [x] Add Room DAO/database and repository instrumentation tests for persistence, one-row-per-reminder invariants, event history, and revision state. They compile; execution requires an attached device or emulator.
 
 ## Phase 2 — Reminder management UI
 
@@ -85,3 +88,15 @@ are marked complete only after the relevant checks have been run.
 - Inexact one-shot alarms are the initial timing mechanism; exact-alarm access is intentionally not requested.
 - Phase 0 scaffold uses compileSdk/targetSdk 37, Android Gradle Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin/Compose compiler plugin 2.3.21, and Compose BOM 2026.08.00.
 - The newer Android CLI is useful and preferred for agent-driven workflows. Modern `sdkmanager` from the Android SDK Command-Line Tools package remains documented and supported for installing SDK packages; a deprecation warning may refer to the legacy SDK Tools package or an older `sdkmanager` earlier on PATH.
+- Local-clock day/week schedules use the device's current time zone; minute/hour schedules remain elapsed-duration based from their anchor instant.
+- There is one persisted outstanding due state and one persisted Tomorrow preview state per reminder. Normal recurrence remains canonical; postponed state is auxiliary and can be collapsed when a newer normal occurrence becomes due.
+- The reminder stores a resolved normal-occurrence cursor so Done/Dismiss cannot recreate the same occurrence after recovery or a time-zone change; this cursor does not alter the recurrence anchor.
+- Tomorrow previews are acknowledged per logical normal occurrence and use one `Seen` action. They are suppressed when the reminder is already due and are not replayed when obsolete after recovery.
+- Any asynchronous receiver work must use a receiver lifecycle mechanism such as `goAsync()`/`PendingResult.finish()`; unmanaged `onReceive()` coroutines are prohibited.
+- The main UI must be understandable in under one minute: direct controls, obvious labels, sensible defaults, few screens, and no unnecessary onboarding or advanced settings.
+
+## Phase 1 verification note
+
+The JVM suite, lint, debug APK, and Android-test APK compilation have been
+verified. Instrumentation execution remains pending a usable physical device or
+emulator; the available adb process is not currently usable in this environment.

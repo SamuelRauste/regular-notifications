@@ -11,8 +11,8 @@ a real notification or reboot should be run on a physical Android phone.
 
 ## Reminder lifecycle
 
-- [ ] Create reminders using minutes, hours, days, and weeks.
-- [ ] Verify validation for blank title, invalid interval, and invalid date/time.
+- [ ] Create reminders for Every 1 day, Every 2 days, Every 7 days, and Every 30 days.
+- [ ] Verify validation for blank title, an interval below 1 day, and invalid date/time.
 - [ ] Edit an enabled reminder and confirm only its alarm changes.
 - [ ] Disable and re-enable a reminder.
 - [ ] Delete a reminder and confirm the deletion prompt, alarm cancellation, and notification cancellation.
@@ -49,11 +49,11 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Reboot the device and verify enabled reminders are rescheduled.
 - [ ] Change the device time zone and verify the intended local wall-clock behavior.
 - [ ] Verify a daily 09:00 reminder remains 09:00 after changing from Finland to Japan time.
-- [ ] Verify minute/hour reminders remain duration-based across a time-zone change.
+- [ ] Verify Every 7 days remains anchored to the original local calendar date/time after a Finland-to-Japan time-zone change.
 - [ ] Verify only relevant future Tomorrow previews remain after recovery; obsolete previews are not replayed.
 - [ ] Verify a preview whose target reminder is now due/past is discarded during recovery, while a slightly late preview for a still-future target remains acknowledgeable.
 - [ ] Change time zone while an eligible Tomorrow preview is pending and verify only the newly scheduled preview/action remains usable.
-- [ ] Test a day/week reminder across a daylight-saving transition when available.
+- [ ] Test an Every X days reminder across both daylight-saving transitions when available.
 - [ ] Test battery saver/doze and record normal Android timing delays.
 - [ ] Close/reopen the app after process death and verify reminders remain correct.
 - [ ] Explicitly force-stop the app, document the alarm suppression behavior, then reopen it.

@@ -1,6 +1,5 @@
 package com.samuel.regularnotifications.domain
 
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -13,25 +12,11 @@ object RecurrenceCalculator {
     ): NormalOccurrence {
         require(index >= 0) { "Occurrence index must not be negative." }
 
-        val scheduledAt = when (definition.intervalUnit) {
-            IntervalUnit.MINUTES ->
-                definition.durationAnchor.plus(Duration.ofMinutes(definition.intervalAmount.toLong() * index))
-
-            IntervalUnit.HOURS ->
-                definition.durationAnchor.plus(Duration.ofHours(definition.intervalAmount.toLong() * index))
-
-            IntervalUnit.DAYS ->
-                LocalDateTime.of(
-                    definition.anchorLocalDate.plusDays(definition.intervalAmount.toLong() * index),
-                    definition.anchorLocalTime,
-                ).atZone(zoneId).toInstant()
-
-            IntervalUnit.WEEKS ->
-                LocalDateTime.of(
-                    definition.anchorLocalDate.plusWeeks(definition.intervalAmount.toLong() * index),
-                    definition.anchorLocalTime,
-                ).atZone(zoneId).toInstant()
-        }
+        val daysFromAnchor = Math.multiplyExact(definition.intervalDays.toLong(), index)
+        val scheduledAt = LocalDateTime.of(
+            definition.anchorLocalDate.plusDays(daysFromAnchor),
+            definition.anchorLocalTime,
+        ).atZone(zoneId).toInstant()
 
         return NormalOccurrence(index = index, scheduledAt = scheduledAt, zoneId = zoneId)
     }

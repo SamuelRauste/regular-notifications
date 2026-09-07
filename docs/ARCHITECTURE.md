@@ -48,30 +48,27 @@ container instead of opening their own Room database instances.
 ## Reminder and recurrence decisions
 
 Each reminder stores a stable ID, title, optional description, enabled state,
-the first local date/time, interval amount/unit, next scheduled occurrence,
-creation/modification timestamps, and enough local-time/zone information to
-recalculate after restart or time-zone changes. A recurrence calculator is a
-pure Kotlin component so it can be tested without Android.
+the first local date/time, a positive `intervalDays`, next scheduled occurrence,
+and creation/modification timestamps. A recurrence calculator is a pure Kotlin
+component so it can be tested without Android.
 
-Minute and hour intervals use elapsed-duration arithmetic. Day and week
-intervals advance local calendar dates while preserving the intended local wall
-clock time, including daylight-saving transitions. Normal recurrence is
-anchored to the original schedule to avoid drift. If multiple occurrences were
-missed, delivery records the relevant current occurrence and schedules the
-first future occurrence instead of emitting a backlog of notifications.
+Every reminder is an Every-X-days local calendar schedule. The calculator
+advances from the original local date/time anchor by `intervalDays` while
+preserving the intended wall-clock time, including daylight-saving transitions.
+Normal recurrence is anchored to the original schedule to avoid drift. If
+multiple occurrences were missed, delivery records the relevant current
+occurrence and schedules the first future occurrence instead of emitting a
+backlog of notifications.
 
 The “+1 day” action postpones only the displayed occurrence. It does not change
 the reminder's recurrence anchor or normal recurring schedule. Done and Dismiss
 record an event and continue the normal schedule. Notification swipe dismissal
 will map to Dismiss only where Android exposes that reliably.
 
-Day and week recurrences are local wall-clock schedules. They store a local
+Every-X-days recurrences are local wall-clock schedules. They store a local
 anchor date/time and recalculate in the device's current `ZoneId`, so a 09:00
-reminder follows 09:00 after a Finland-to-Japan time-zone change. Java time's
-normal `LocalDateTime.atZone()` rules handle DST gaps and overlaps. Minute and
-hour recurrences are duration-based from their persisted anchor instant, so a
-time-zone change changes their displayed local time but not their elapsed-time
-schedule.
+Every 7 days reminder follows 09:00 after a Finland-to-Japan time-zone change.
+Java time's normal `LocalDateTime.atZone()` rules handle DST gaps and overlaps.
 
 The scheduler uses inexact one-shot alarms. Exact-alarm permission is not part
 of the design. A recovery calculation finds the latest normal occurrence that
@@ -85,7 +82,7 @@ The schema is deliberately limited to four conceptual tables:
 
 | Concept | Persisted representation | Invariant |
 | --- | --- | --- |
-| Reminder definition / recurrence anchor | `reminders` row with stable ID, title, description, enabled flag, local anchor date/time, duration anchor instant, interval amount/unit, timestamps | The anchor and interval are never changed by notification actions. |
+| Reminder definition / recurrence anchor | `reminders` row with stable ID, title, description, enabled flag, local anchor date/time, `intervalDays`, and timestamps | The anchor and interval are never changed by notification actions. |
 | Current calculated next normal recurrence | Cached normal occurrence index, epoch instant, and last calculation zone on the reminder row | It is derived from the definition and recalculated after recovery/time-zone changes. |
 | Resolved normal-occurrence cursor | Highest normal occurrence index already resolved by Done/Dismiss on the reminder row | It prevents an already resolved past occurrence from being recreated without changing the recurrence anchor or normal schedule. |
 | Outstanding due state | One `outstanding_due_states` row keyed by reminder ID, containing the latest contributing normal occurrence index, due instant, optional postponed-until instant, postponement count, and revision | There is never more than one unresolved due state or normal actionable notification for a reminder. |
@@ -114,6 +111,11 @@ identities use the same pair. State revisions are persisted so later receiver
 work can reject stale actions. The database primary keys, transaction
 boundaries, and revision checks prevent duplicate delivery rather than relying
 on cleanup after several notifications have already been posted.
+
+The current Room schema is version 2. It removes the old duration anchor and
+interval-unit fields in favor of `intervalDays`. This is a pre-release app, so
+the app deliberately destructively recreates an old local development database
+rather than carrying a migration for unsupported recurrence types.
 
 Tomorrow previews target only the next normal future occurrence, except that an
 every-1-day reminder never has one. Eligible previews are scheduled one local

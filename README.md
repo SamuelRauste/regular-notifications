@@ -10,7 +10,7 @@ advertisements, or network access.
 ## Status
 
 Phase 1 is complete: the project has Room persistence, repository operations,
-pure Kotlin recurrence/state logic, and automated tests. The Compose UI,
+and pure Kotlin recurrence/state logic for **Every X days**. The Compose UI,
 AlarmManager scheduling, notification delivery, and action receivers are
 intentionally not implemented yet. Android instrumentation tests compile but
 still need a usable phone or emulator to run.
@@ -43,14 +43,14 @@ The debug APK will be under `app/build/outputs/apk/debug/`.
 The current project uses minSdk 26, compileSdk/targetSdk 37, Android Gradle
 Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin, and Jetpack Compose Material 3.
 
-The reminder model treats the normal recurrence as canonical. A displayed
-occurrence can be postponed by one calendar day without changing the recurrence
-anchor or normal future schedule. There is at most one unresolved due state and
-one Tomorrow preview per reminder. A reminder set to every 1 day never creates
-a Tomorrow preview. For other schedules, a preview remains acknowledgeable
-after its delivery time until its actual reminder becomes due. Day/week
-schedules follow the device's current local time zone; minute/hour schedules
-remain duration-based.
+The reminder model treats the normal recurrence as canonical. Every reminder
+uses an original local date/time anchor and a positive interval in days, such
+as **Every 7 days**. A displayed occurrence can be postponed by one calendar
+day without changing that anchor or normal future schedule. There is at most
+one unresolved due state and one Tomorrow preview per reminder. Every 1 day
+does not create a Tomorrow preview; every 2 or more days can. A preview remains
+acknowledgeable after its delivery time until its actual reminder becomes due.
+All reminders follow the device's current local time zone.
 
 ## Run on a physical phone
 
@@ -66,10 +66,10 @@ Notification delivery also depends on Android's alarm and battery-management
 policies. The initial scheduler uses reasonably punctual inexact one-shot
 `AlarmManager` alarms and does not request exact-alarm special access.
 
-Day/week recurrences preserve local wall-clock time across daylight-saving
-changes; minute/hour recurrences are duration-based. Android may delay alarms,
-especially in battery saver or doze modes. If the user force-stops the app,
-Android may suppress its alarms and receivers until the app is opened again.
+Every-X-days recurrences preserve local wall-clock time across daylight-saving
+and time-zone changes. Android may delay alarms, especially in battery saver or
+doze modes. If the user force-stops the app, Android may suppress its alarms
+and receivers until the app is opened again.
 
 ## Documentation
 

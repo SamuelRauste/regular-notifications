@@ -6,7 +6,6 @@ import com.samuel.regularnotifications.data.local.ReminderDatabase
 import com.samuel.regularnotifications.data.local.ReminderEntity
 import com.samuel.regularnotifications.data.local.ReminderEventEntity
 import com.samuel.regularnotifications.data.local.TomorrowPreviewEntity
-import com.samuel.regularnotifications.domain.IntervalUnit
 import com.samuel.regularnotifications.domain.ReminderDefinition
 import com.samuel.regularnotifications.domain.ReminderDraft
 import com.samuel.regularnotifications.domain.ReminderEventType
@@ -60,7 +59,7 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): Long = database.withTransaction {
-        val definition = input.toDefinition(id = 0, zoneId = zoneId)
+        val definition = input.toDefinition(id = 0)
         val nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId)
         val entity = definition.toEntity(
             id = 0,
@@ -82,7 +81,7 @@ class ReminderRepository(
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
         val existing = reminderDao.getById(id) ?: return@withTransaction RepositoryActionResult.NOT_FOUND
-        val definition = input.toDefinition(id = id, zoneId = zoneId)
+        val definition = input.toDefinition(id = id)
         val nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId)
         reminderDao.update(
             definition.toEntity(
@@ -367,9 +366,7 @@ private fun ReminderDefinition.toEntity(
         enabled = enabled,
         anchorLocalDate = anchorLocalDate.toString(),
         anchorLocalTime = anchorLocalTime.toString(),
-        durationAnchorEpochMillis = durationAnchor.toEpochMilli(),
-        intervalAmount = intervalAmount,
-        intervalUnit = intervalUnit.name,
+        intervalDays = intervalDays,
         nextNormalOccurrenceIndex = nextNormal.index,
         nextNormalOccurrenceEpochMillis = nextNormal.scheduledAt.toEpochMilli(),
         nextNormalZoneId = zoneId.id,
@@ -386,9 +383,7 @@ private fun ReminderEntity.toDefinition(): ReminderDefinition =
         enabled = enabled,
         anchorLocalDate = java.time.LocalDate.parse(anchorLocalDate),
         anchorLocalTime = java.time.LocalTime.parse(anchorLocalTime),
-        durationAnchor = Instant.ofEpochMilli(durationAnchorEpochMillis),
-        intervalAmount = intervalAmount,
-        intervalUnit = IntervalUnit.fromPersisted(intervalUnit),
+        intervalDays = intervalDays,
     )
 
 private fun OutstandingDueEntity.toDomain() =

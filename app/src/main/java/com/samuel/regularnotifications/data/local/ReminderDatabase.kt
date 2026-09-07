@@ -10,7 +10,7 @@ import androidx.room.RoomDatabase
         TomorrowPreviewEntity::class,
         ReminderEventEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class ReminderDatabase : RoomDatabase() {

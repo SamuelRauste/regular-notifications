@@ -53,9 +53,8 @@ object ReminderStateMachine {
         )
     }
 
-    /** Daily (every 1 day) reminders deliberately have no Tomorrow preview. */
-    fun supportsTomorrowPreview(definition: ReminderDefinition): Boolean =
-        definition.intervalUnit != IntervalUnit.DAYS || definition.intervalAmount != 1
+    /** Every-1-day reminders deliberately have no Tomorrow preview. */
+    fun supportsTomorrowPreview(definition: ReminderDefinition): Boolean = definition.intervalDays >= 2
 
     /**
      * Classifies a persisted preview without deleting it merely because its

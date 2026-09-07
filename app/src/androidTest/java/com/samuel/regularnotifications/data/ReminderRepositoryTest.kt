@@ -5,7 +5,6 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.samuel.regularnotifications.data.local.ReminderDatabase
-import com.samuel.regularnotifications.domain.IntervalUnit
 import com.samuel.regularnotifications.domain.ReminderEventType
 import com.samuel.regularnotifications.domain.ReminderInput
 import java.time.Instant
@@ -84,8 +83,7 @@ class ReminderRepositoryTest {
         val updated = input().copy(
             title = "Updated reminder",
             firstOccurrence = LocalDateTime.of(2026, 1, 5, 12, 0),
-            intervalAmount = 2,
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 14,
         )
         assertEquals(
             RepositoryActionResult.APPLIED,
@@ -94,7 +92,7 @@ class ReminderRepositoryTest {
 
         val stored = database.reminderDao().getById(reminderId)!!
         assertEquals("Updated reminder", stored.title)
-        assertEquals("WEEKS", stored.intervalUnit)
+        assertEquals(14, stored.intervalDays)
         assertEquals(0, stored.nextNormalOccurrenceIndex)
         assertNull(database.outstandingDueDao().getByReminderId(reminderId))
 
@@ -109,7 +107,7 @@ class ReminderRepositoryTest {
         val reminderId = repository.createReminder(
             input().copy(
                 firstOccurrence = LocalDateTime.of(2026, 1, 2, 9, 0),
-                intervalUnit = IntervalUnit.WEEKS,
+                intervalDays = 7,
             ),
             utc,
             scheduledNow,
@@ -152,7 +150,7 @@ class ReminderRepositoryTest {
         val reminderId = repository.createReminder(
             input().copy(
                 firstOccurrence = LocalDateTime.of(2026, 1, 2, 9, 0),
-                intervalUnit = IntervalUnit.WEEKS,
+                intervalDays = 7,
             ),
             utc,
             scheduledNow,
@@ -200,7 +198,6 @@ class ReminderRepositoryTest {
         description = "Description",
         enabled = true,
         firstOccurrence = LocalDateTime.of(2026, 1, 1, 9, 0),
-        intervalAmount = 1,
-        intervalUnit = IntervalUnit.DAYS,
+        intervalDays = 1,
     )
 }

@@ -1,12 +1,12 @@
 {
   "formatVersion": 1,
   "database": {
-    "version": 1,
-    "identityHash": "06ec59226c7bc26268778b9c5748432a",
+    "version": 2,
+    "identityHash": "061921c37574224175b134c20ddd6e74",
     "entities": [
       {
         "tableName": "reminders",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `enabled` INTEGER NOT NULL, `anchorLocalDate` TEXT NOT NULL, `anchorLocalTime` TEXT NOT NULL, `durationAnchorEpochMillis` INTEGER NOT NULL, `intervalAmount` INTEGER NOT NULL, `intervalUnit` TEXT NOT NULL, `nextNormalOccurrenceIndex` INTEGER NOT NULL, `nextNormalOccurrenceEpochMillis` INTEGER NOT NULL, `nextNormalZoneId` TEXT NOT NULL, `lastResolvedNormalOccurrenceIndex` INTEGER, `createdAtEpochMillis` INTEGER NOT NULL, `modifiedAtEpochMillis` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `title` TEXT NOT NULL, `description` TEXT, `enabled` INTEGER NOT NULL, `anchorLocalDate` TEXT NOT NULL, `anchorLocalTime` TEXT NOT NULL, `intervalDays` INTEGER NOT NULL, `nextNormalOccurrenceIndex` INTEGER NOT NULL, `nextNormalOccurrenceEpochMillis` INTEGER NOT NULL, `nextNormalZoneId` TEXT NOT NULL, `lastResolvedNormalOccurrenceIndex` INTEGER, `createdAtEpochMillis` INTEGER NOT NULL, `modifiedAtEpochMillis` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -44,21 +44,9 @@
             "notNull": true
           },
           {
-            "fieldPath": "durationAnchorEpochMillis",
-            "columnName": "durationAnchorEpochMillis",
+            "fieldPath": "intervalDays",
+            "columnName": "intervalDays",
             "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "intervalAmount",
-            "columnName": "intervalAmount",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "intervalUnit",
-            "columnName": "intervalUnit",
-            "affinity": "TEXT",
             "notNull": true
           },
           {
@@ -376,7 +364,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '06ec59226c7bc26268778b9c5748432a')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '061921c37574224175b134c20ddd6e74')"
     ]
   }
 }

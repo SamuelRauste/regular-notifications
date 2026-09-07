@@ -9,5 +9,10 @@ object ReminderDatabaseProvider {
             context = context.applicationContext,
             klass = ReminderDatabase::class.java,
             name = "reminders.db",
-        ).build()
+        )
+            // Development-only schema v1 stored obsolete interval-unit and
+            // duration-anchor fields. This pre-release app intentionally
+            // recreates that local database for the simpler v2 model.
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
 }

@@ -1,9 +1,9 @@
 package com.samuel.regularnotifications.domain
 
-import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.Instant
 import java.time.ZoneId
 
 data class ReminderDraft(
@@ -12,8 +12,7 @@ data class ReminderDraft(
     val enabled: Boolean = true,
     val firstDate: LocalDate? = null,
     val firstTime: LocalTime? = null,
-    val intervalAmount: Int? = null,
-    val intervalUnit: IntervalUnit? = null,
+    val intervalDays: Int? = null,
 )
 
 data class ReminderInput(
@@ -21,8 +20,7 @@ data class ReminderInput(
     val description: String?,
     val enabled: Boolean,
     val firstOccurrence: LocalDateTime,
-    val intervalAmount: Int,
-    val intervalUnit: IntervalUnit,
+    val intervalDays: Int,
 )
 
 data class ReminderDefinition(
@@ -32,12 +30,10 @@ data class ReminderDefinition(
     val enabled: Boolean,
     val anchorLocalDate: LocalDate,
     val anchorLocalTime: LocalTime,
-    val durationAnchor: Instant,
-    val intervalAmount: Int,
-    val intervalUnit: IntervalUnit,
+    val intervalDays: Int,
 )
 
-fun ReminderInput.toDefinition(id: Long, zoneId: ZoneId): ReminderDefinition =
+fun ReminderInput.toDefinition(id: Long): ReminderDefinition =
     ReminderDefinition(
         id = id,
         title = title.trim(),
@@ -45,9 +41,7 @@ fun ReminderInput.toDefinition(id: Long, zoneId: ZoneId): ReminderDefinition =
         enabled = enabled,
         anchorLocalDate = firstOccurrence.toLocalDate(),
         anchorLocalTime = firstOccurrence.toLocalTime(),
-        durationAnchor = firstOccurrence.atZone(zoneId).toInstant(),
-        intervalAmount = intervalAmount,
-        intervalUnit = intervalUnit,
+        intervalDays = intervalDays,
     )
 
 data class NormalOccurrence(

@@ -40,7 +40,7 @@ class ReminderStateMachineTest {
     fun futureReminderGetsOneTomorrowPreviewAndAcknowledgementDoesNotMutateSchedule() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
         val now = instant("2026-01-01T08:00:00Z")
 
@@ -71,7 +71,7 @@ class ReminderStateMachineTest {
     fun tomorrowPreviewIsSuppressedWhenDueOrPastItsPreviewWindow() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
 
         val beforePreview = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
@@ -88,7 +88,7 @@ class ReminderStateMachineTest {
     fun missingLatePreviewIsNotRecreatedDuringRecovery() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
 
         val recovered = ReminderStateMachine.initial(definition, instant("2026-01-01T09:10:00Z"), utc)
@@ -166,7 +166,7 @@ class ReminderStateMachineTest {
     fun reconcileKeepsAcknowledgedTomorrowStateForTheSameNormalOccurrence() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
         val initial = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
         val acknowledged = ReminderStateMachine.acknowledgeTomorrow(initial)
@@ -186,8 +186,7 @@ class ReminderStateMachineTest {
     fun dailyOneDayRecurrenceNeverCreatesTomorrowPreview() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.DAYS,
-            intervalAmount = 1,
+            intervalDays = 1,
         )
 
         val state = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
@@ -200,8 +199,7 @@ class ReminderStateMachineTest {
     fun nonDailyEligibleRecurrenceCreatesTomorrowPreview() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.DAYS,
-            intervalAmount = 2,
+            intervalDays = 2,
         )
 
         val state = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
@@ -214,7 +212,7 @@ class ReminderStateMachineTest {
     fun persistedPreviewBecomesCurrentInsteadOfObsoleteAfterItsDeliveryTime() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
         val scheduled = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
 
@@ -237,7 +235,7 @@ class ReminderStateMachineTest {
     fun previewForANowDueTargetIsDiscardedInsteadOfReplayed() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
         val scheduled = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
         val scheduledPreview = checkNotNull(scheduled.tomorrowPreview)
@@ -265,7 +263,7 @@ class ReminderStateMachineTest {
     fun unchangedPreviewReconciliationKeepsItsRevision() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
         val initial = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
 
@@ -284,7 +282,7 @@ class ReminderStateMachineTest {
     fun timezoneRescheduleOfSamePreviewTargetIncrementsRevision() {
         val definition = definition(
             anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
-            intervalUnit = IntervalUnit.WEEKS,
+            intervalDays = 7,
         )
         val now = instant("2025-12-31T23:00:00Z")
         val initial = ReminderStateMachine.initial(definition, now, utc)
@@ -333,8 +331,7 @@ class ReminderStateMachineTest {
 
     private fun definition(
         anchor: LocalDateTime,
-        intervalUnit: IntervalUnit = IntervalUnit.DAYS,
-        intervalAmount: Int = 1,
+        intervalDays: Int = 1,
     ): ReminderDefinition = ReminderDefinition(
         id = 1,
         title = "Test reminder",
@@ -342,9 +339,7 @@ class ReminderStateMachineTest {
         enabled = true,
         anchorLocalDate = anchor.toLocalDate(),
         anchorLocalTime = anchor.toLocalTime(),
-        durationAnchor = anchor.toInstant(utc.rules.getOffset(anchor)),
-        intervalAmount = intervalAmount,
-        intervalUnit = intervalUnit,
+        intervalDays = intervalDays,
     )
 
     private fun instant(value: String): Instant = Instant.parse(value)

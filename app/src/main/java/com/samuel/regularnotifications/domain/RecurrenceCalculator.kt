@@ -87,10 +87,17 @@ object RecurrenceCalculator {
         zoneId: ZoneId,
     ): Instant? {
         if (occurrence.scheduledAt <= now) return null
+        val previewAt = tomorrowPreviewInstant(occurrence, zoneId)
+        return previewAt.takeIf { it > now && it < occurrence.scheduledAt }
+    }
+
+    fun tomorrowPreviewInstant(
+        occurrence: NormalOccurrence,
+        zoneId: ZoneId,
+    ): Instant {
         val actualLocal = occurrence.scheduledAt.atZone(zoneId)
         val previewLocal = actualLocal.toLocalDate().minusDays(1).atTime(actualLocal.toLocalTime())
-        val previewAt = previewLocal.atZone(zoneId).toInstant()
-        return previewAt.takeIf { it > now && it < occurrence.scheduledAt }
+        return previewLocal.atZone(zoneId).toInstant()
     }
 
     fun plusCalendarDays(instant: Instant, days: Long, zoneId: ZoneId): Instant =

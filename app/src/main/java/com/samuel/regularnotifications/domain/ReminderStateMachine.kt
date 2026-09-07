@@ -36,39 +36,42 @@ object ReminderStateMachine {
             else -> existingDue
         }
 
-        val tomorrowPreview = if (outstandingDue == null) {
-            val previewAt = RecurrenceCalculator.tomorrowPreviewAt(window.firstFuture, now, zoneId)
-            if (previewAt == null) {
-                null
-            } else {
-                val oldPreview = current?.tomorrowPreview
-                if (oldPreview?.normalOccurrenceIndex == window.firstFuture.index) {
-                    oldPreview.copy(
-                        occurrenceEpochMillis = window.firstFuture.scheduledAt.toEpochMilli(),
-                        previewEpochMillis = previewAt.toEpochMilli(),
-                        zoneId = zoneId.id,
-                    )
-                } else {
-                    TomorrowPreviewState(
-                        normalOccurrenceIndex = window.firstFuture.index,
-                        occurrenceEpochMillis = window.firstFuture.scheduledAt.toEpochMilli(),
-                        previewEpochMillis = previewAt.toEpochMilli(),
-                        zoneId = zoneId.id,
-                        acknowledged = false,
-                        revision = (oldPreview?.revision ?: 0) + 1,
-                    )
-                }
-            }
-        } else {
-            null
-        }
+        val tomorrowPreview = reconcileTomorrowPreview(
+            definition = definition,
+            oldPreview = current?.tomorrowPreview,
+            nextNormal = window.firstFuture,
+            hasOutstandingDue = outstandingDue != null,
+            now = now,
+            zoneId = zoneId,
+        )
 
         return ReminderScheduleState(
             nextNormal = window.firstFuture,
             outstandingDue = outstandingDue,
-            tomorrowPreview = if (outstandingDue == null) tomorrowPreview else null,
+            tomorrowPreview = tomorrowPreview,
             lastResolvedNormalOccurrenceIndex = lastResolvedIndex,
         )
+    }
+
+    /** Daily (every 1 day) reminders deliberately have no Tomorrow preview. */
+    fun supportsTomorrowPreview(definition: ReminderDefinition): Boolean =
+        definition.intervalUnit != IntervalUnit.DAYS || definition.intervalAmount != 1
+
+    /**
+     * Classifies a persisted preview without deleting it merely because its
+     * delivery time has passed. A CURRENT preview is still valid for Seen.
+     */
+    fun tomorrowPreviewLifecycle(
+        preview: TomorrowPreviewState,
+        now: Instant,
+        hasOutstandingDue: Boolean,
+    ): TomorrowPreviewLifecycle = when {
+        hasOutstandingDue || preview.occurrenceEpochMillis <= now.toEpochMilli() ->
+            TomorrowPreviewLifecycle.OBSOLETE
+
+        preview.acknowledged -> TomorrowPreviewLifecycle.ACKNOWLEDGED
+        preview.previewEpochMillis > now.toEpochMilli() -> TomorrowPreviewLifecycle.SCHEDULED
+        else -> TomorrowPreviewLifecycle.CURRENT
     }
 
     fun postpone(
@@ -124,6 +127,53 @@ object ReminderStateMachine {
                 acknowledged = true,
                 revision = preview.revision + 1,
             ),
+        )
+    }
+
+    private fun reconcileTomorrowPreview(
+        definition: ReminderDefinition,
+        oldPreview: TomorrowPreviewState?,
+        nextNormal: NormalOccurrence,
+        hasOutstandingDue: Boolean,
+        now: Instant,
+        zoneId: ZoneId,
+    ): TomorrowPreviewState? {
+        if (hasOutstandingDue || !supportsTomorrowPreview(definition)) return null
+
+        val occurrenceEpochMillis = nextNormal.scheduledAt.toEpochMilli()
+        val previewEpochMillis = RecurrenceCalculator
+            .tomorrowPreviewInstant(nextNormal, zoneId)
+            .toEpochMilli()
+        if (previewEpochMillis >= occurrenceEpochMillis) return null
+
+        if (oldPreview?.normalOccurrenceIndex == nextNormal.index) {
+            val schedulingChanged =
+                oldPreview.occurrenceEpochMillis != occurrenceEpochMillis ||
+                    oldPreview.previewEpochMillis != previewEpochMillis ||
+                    oldPreview.zoneId != zoneId.id
+            val reconciled = oldPreview.copy(
+                occurrenceEpochMillis = occurrenceEpochMillis,
+                previewEpochMillis = previewEpochMillis,
+                zoneId = zoneId.id,
+                revision = if (schedulingChanged) oldPreview.revision + 1 else oldPreview.revision,
+            )
+            return reconciled.takeUnless {
+                tomorrowPreviewLifecycle(it, now, hasOutstandingDue = false) ==
+                    TomorrowPreviewLifecycle.OBSOLETE
+            }
+        }
+
+        // There is no persisted preview for this target. Do not replay one
+        // after its scheduled delivery time during recovery.
+        if (previewEpochMillis <= now.toEpochMilli()) return null
+
+        return TomorrowPreviewState(
+            normalOccurrenceIndex = nextNormal.index,
+            occurrenceEpochMillis = occurrenceEpochMillis,
+            previewEpochMillis = previewEpochMillis,
+            zoneId = zoneId.id,
+            acknowledged = false,
+            revision = (oldPreview?.revision ?: 0) + 1,
         )
     }
 

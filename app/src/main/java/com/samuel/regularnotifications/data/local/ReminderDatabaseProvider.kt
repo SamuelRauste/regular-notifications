@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.room.Room
 
 object ReminderDatabaseProvider {
-    fun create(context: Context): ReminderDatabase =
+    internal fun open(context: Context): ReminderDatabase =
         Room.databaseBuilder(
             context = context.applicationContext,
             klass = ReminderDatabase::class.java,

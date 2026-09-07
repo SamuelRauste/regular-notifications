@@ -1,17 +1,19 @@
 # Regular Notifications
 
 An offline Android reminder app for recurring notifications with Done, Dismiss,
-and “+1 day” actions. It will also provide a single “Tomorrow: …” preview for
-the next upcoming occurrence. The app will keep reminders and their history
-locally on the device. It will not use accounts, a server, analytics,
+and “+1 day” actions. Eligible schedules will also provide a single
+“Tomorrow: …” preview for the next upcoming occurrence; every-1-day reminders
+intentionally do not receive one. The app will keep reminders and their
+history locally on the device. It will not use accounts, a server, analytics,
 advertisements, or network access.
 
 ## Status
 
-Phase 1 persistence and recurrence work is in progress: the project now has
-Room persistence, repository operations, pure Kotlin recurrence/state logic,
-and automated tests. The Compose UI, AlarmManager scheduling, notification
-delivery, and action receivers are intentionally not implemented yet.
+Phase 1 is complete: the project has Room persistence, repository operations,
+pure Kotlin recurrence/state logic, and automated tests. The Compose UI,
+AlarmManager scheduling, notification delivery, and action receivers are
+intentionally not implemented yet. Android instrumentation tests compile but
+still need a usable phone or emulator to run.
 
 ## Prerequisites
 
@@ -44,8 +46,11 @@ Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin, and Jetpack Compose Material 3.
 The reminder model treats the normal recurrence as canonical. A displayed
 occurrence can be postponed by one calendar day without changing the recurrence
 anchor or normal future schedule. There is at most one unresolved due state and
-one Tomorrow preview per reminder. Day/week schedules follow the device's
-current local time zone; minute/hour schedules remain duration-based.
+one Tomorrow preview per reminder. A reminder set to every 1 day never creates
+a Tomorrow preview. For other schedules, a preview remains acknowledgeable
+after its delivery time until its actual reminder becomes due. Day/week
+schedules follow the device's current local time zone; minute/hour schedules
+remain duration-based.
 
 ## Run on a physical phone
 

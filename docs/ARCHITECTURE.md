@@ -6,6 +6,8 @@ The application will be a single Android application module with a small,
 feature-oriented structure:
 
 ```text
+Application-scoped AppContainer
+        |
 UI (Compose screens)
         |
 ViewModels and UI state (StateFlow)
@@ -37,6 +39,11 @@ remain later phases.
 - `notifications`: channel, notification factory, and action handling.
 - `receivers`: alarm delivery, notification actions, boot, and time/time-zone changes.
 - `ui`: list, editor, history, ViewModels, and Compose theme/screens.
+
+`RegularNotificationsApplication` owns one lazy `AppContainer` per app
+process. The container owns the Room database and repository. Future UI,
+alarm, boot/time, and notification-action components must obtain this shared
+container instead of opening their own Room database instances.
 
 ## Reminder and recurrence decisions
 
@@ -82,7 +89,7 @@ The schema is deliberately limited to four conceptual tables:
 | Current calculated next normal recurrence | Cached normal occurrence index, epoch instant, and last calculation zone on the reminder row | It is derived from the definition and recalculated after recovery/time-zone changes. |
 | Resolved normal-occurrence cursor | Highest normal occurrence index already resolved by Done/Dismiss on the reminder row | It prevents an already resolved past occurrence from being recreated without changing the recurrence anchor or normal schedule. |
 | Outstanding due state | One `outstanding_due_states` row keyed by reminder ID, containing the latest contributing normal occurrence index, due instant, optional postponed-until instant, postponement count, and revision | There is never more than one unresolved due state or normal actionable notification for a reminder. |
-| Tomorrow preview state | One `tomorrow_previews` row keyed by reminder ID, containing the target normal occurrence index, occurrence/preview instants, zone, acknowledgement, and revision | There is never more than one preview for a reminder; it is suppressed while that reminder has an outstanding due state. |
+| Tomorrow preview state | One `tomorrow_previews` row keyed by reminder ID, containing the target normal occurrence index, occurrence/preview instants, zone, acknowledgement, and revision | There is never more than one preview for a reminder; it is suppressed while that reminder has an outstanding due state and is never created for an every-1-day reminder. |
 | Reminder event/history | Append-only `reminder_events` rows with reminder ID, logical occurrence index, action, times, and optional postponement time | Done, Dismiss, +1 day, and Seen are auditable without changing the recurrence definition. |
 
 The normal occurrence index is a stable zero-based logical instance derived
@@ -108,12 +115,22 @@ work can reject stale actions. The database primary keys, transaction
 boundaries, and revision checks prevent duplicate delivery rather than relying
 on cleanup after several notifications have already been posted.
 
-Tomorrow previews target only the next normal future occurrence. The preview is
-scheduled one local calendar day before that occurrence at its local wall-clock
-time. `Seen` marks the target index acknowledged and does not alter any normal
-schedule or due state. If the preview time is already past during recovery, or
-the reminder is due, the preview is obsolete and is not recreated. A changed
-target index starts a new unacknowledged preview row.
+Tomorrow previews target only the next normal future occurrence, except that an
+every-1-day reminder never has one. Eligible previews are scheduled one local
+calendar day before the occurrence at its local wall-clock time. Their
+lifecycle is derived from the persisted row: before `previewAt` it is
+scheduled; from `previewAt` until the actual occurrence is due it is current
+and remains valid for `Seen`; an acknowledged row remains acknowledged; and a
+target that is due/past (or has an outstanding due state) is obsolete.
+
+A missing preview is not recreated after its scheduled preview time during
+recovery, avoiding old notification replay. In contrast, an existing current
+preview is retained so a slightly late AlarmManager delivery can still be
+acknowledged. `Seen` transactionally checks the persisted/reconciled preview
+and revision, records only `TOMORROW_SEEN`, and never changes the recurrence or
+normal due state. A same-target preview retains its revision only when its
+occurrence instant, preview instant, and zone are unchanged; any of those
+scheduling changes increments the revision.
 
 ## Scheduling and identity
 
@@ -133,11 +150,14 @@ directly from `onReceive()` are not acceptable.
 
 ## Notifications and permissions
 
-Notifications use `NotificationCompat` with a dedicated channel and three
-actions: Done, Dismiss, and +1 day. Android 13+ notification permission is
-requested at runtime; a denial is shown as a useful UI state while reminders
-remain editable. Action receivers update Room and cancel/update notification
-state without depending on the app process remaining alive.
+Notifications use `NotificationCompat` with a dedicated channel. A normal due
+notification has Done, Dismiss, and +1 day actions. An eligible Tomorrow
+notification uses the `Tomorrow: [title]` format and has only the Seen action;
+every-1-day reminders never receive this notification. Android 13+ notification
+permission is requested at runtime; a denial is shown as a useful UI state
+while reminders remain editable. Action receivers update Room and
+cancel/update notification state without depending on the app process remaining
+alive.
 
 ## Reliability and privacy
 

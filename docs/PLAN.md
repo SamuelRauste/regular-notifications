@@ -22,9 +22,9 @@ are marked complete only after the relevant checks have been run.
 - [x] Implement reminder and reminder-event entities, DAOs, database, repository, and Flow access. StateFlow remains a Phase 2 ViewModel concern.
 - [x] Implement a pure Kotlin recurrence calculator for minute/hour duration recurrence and day/week wall-clock recurrence.
 - [x] Define anchoring, missed-occurrence, time-zone, and postponement semantics.
-- [x] Implement pure Kotlin state transitions for recovery, due-state merging, repeated +1 day, resolution, and Tomorrow preview acknowledgement.
-- [x] Add unit tests for all recurrence units, past/future starts, missed occurrences, date boundaries, DST, time-zone changes, drift, anchoring, postponement, validation, collisions, and idempotency.
-- [x] Add Room DAO/database and repository instrumentation tests for persistence, one-row-per-reminder invariants, event history, and revision state. They compile; execution requires an attached device or emulator.
+- [x] Implement pure Kotlin state transitions for recovery, due-state merging, repeated +1 day, resolution, and the full Tomorrow preview lifecycle.
+- [x] Add unit tests for all recurrence units, past/future starts, missed occurrences, date boundaries, DST, time-zone changes, drift, anchoring, postponement, validation, collisions, Tomorrow lifecycle, and idempotency.
+- [x] Add Room DAO/database and repository instrumentation tests for persistence, one-row-per-reminder invariants, event history, revision state, and application-scoped ownership. They compile; execution requires an attached device or emulator.
 
 ## Phase 2 — Reminder management UI
 
@@ -36,25 +36,29 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 3 — Notification foundation
 
-- [ ] Create notification channel and notification factory.
+- [ ] Create a notification channel and factory for both normal due notifications and eligible `Tomorrow: [reminder title]` previews.
+- [ ] Give a normal due notification Done, Dismiss, and +1 day actions; give a Tomorrow notification only a Seen action.
+- [ ] Ensure every-1-day reminders never create a Tomorrow notification.
 - [ ] Request `POST_NOTIFICATIONS` on supported Android versions.
 - [ ] Handle denied permission without breaking reminder management.
 - [ ] Add a temporary/test notification path, then cover it with tests and documentation.
 
 ## Phase 4 — Alarm scheduling and delivery
 
-- [ ] Define `ReminderScheduler` and implement one-shot inexact `AlarmManager` scheduling.
-- [ ] Use stable reminder IDs in unique `PendingIntent`s.
+- [ ] Define `ReminderScheduler` and implement one-shot inexact `AlarmManager` scheduling for applicable `DUE` and `TOMORROW` states.
+- [ ] Use stable `(reminderId, notification kind)` identities in unique `PendingIntent`s and notification IDs.
 - [ ] Implement alarm delivery receiver and database-backed next-occurrence calculation.
-- [ ] Make scheduling idempotent and safe when a reminder was deleted before delivery.
+- [ ] Make scheduling/cancellation idempotent and safe when a reminder was deleted before delivery; never schedule Tomorrow for every-1-day reminders.
+- [ ] Reconstruct both applicable alarm kinds from Room-derived state after boot, time, and time-zone recovery.
 - [ ] Add scheduling identifier and delivery tests.
 
 ## Phase 5 — Notification actions
 
-- [ ] Implement Done, Dismiss, and +1 day action receivers.
+- [ ] Implement Done, Dismiss, +1 day, and Tomorrow Seen action receivers.
 - [ ] Record each event and remove the displayed notification.
 - [ ] Preserve normal schedule for Done/Dismiss.
 - [ ] Postpone only the displayed occurrence by one calendar day; do not change the reminder's recurrence anchor or normal schedule.
+- [ ] Make Seen acknowledge only its Tomorrow preview, remove that preview notification, preserve recurrence and actual-reminder status, and reject stale revisions.
 - [ ] Implement notification swipe dismissal where Android reliably exposes it.
 - [ ] Add action-processing tests.
 
@@ -92,11 +96,15 @@ are marked complete only after the relevant checks have been run.
 - There is one persisted outstanding due state and one persisted Tomorrow preview state per reminder. Normal recurrence remains canonical; postponed state is auxiliary and can be collapsed when a newer normal occurrence becomes due.
 - The reminder stores a resolved normal-occurrence cursor so Done/Dismiss cannot recreate the same occurrence after recovery or a time-zone change; this cursor does not alter the recurrence anchor.
 - Tomorrow previews are acknowledged per logical normal occurrence and use one `Seen` action. They are suppressed when the reminder is already due and are not replayed when obsolete after recovery.
+- Every-1-day reminders never create Tomorrow preview state or Tomorrow notifications. For eligible schedules, an existing preview remains current after `previewAt` until Seen, supersession, or the actual occurrence becoming due; a missing past preview is not replayed during recovery.
+- A Tomorrow revision changes whenever its occurrence instant, preview instant, or time zone changes, and stays stable for an unchanged reconciliation.
+- `RegularNotificationsApplication` owns one lazy application-scoped container with the Room database and repository; future UI and receivers must use it rather than creating database instances.
 - Any asynchronous receiver work must use a receiver lifecycle mechanism such as `goAsync()`/`PendingResult.finish()`; unmanaged `onReceive()` coroutines are prohibited.
 - The main UI must be understandable in under one minute: direct controls, obvious labels, sensible defaults, few screens, and no unnecessary onboarding or advanced settings.
 
 ## Phase 1 verification note
 
-The JVM suite, lint, debug APK, and Android-test APK compilation have been
-verified. Instrumentation execution remains pending a usable physical device or
-emulator; the available adb process is not currently usable in this environment.
+Phase 1 implementation is complete. The JVM suite, lint, debug APK, and
+Android-test APK compilation are verified. Instrumentation execution remains
+pending a usable physical device or emulator; the available adb process is not
+currently usable in this environment.

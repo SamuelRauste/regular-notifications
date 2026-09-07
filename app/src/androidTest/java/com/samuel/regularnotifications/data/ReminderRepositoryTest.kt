@@ -103,12 +103,16 @@ class ReminderRepositoryTest {
     }
 
     @Test
-    fun tomorrowSeenIsIdempotentAndDoesNotResolveTheReminder() = runBlocking {
-        val futureNow = Instant.parse("2026-01-01T08:00:00Z")
+    fun lateTomorrowSeenIsIdempotentAndDoesNotResolveTheReminder() = runBlocking {
+        val scheduledNow = Instant.parse("2026-01-01T08:00:00Z")
+        val lateSeenNow = Instant.parse("2026-01-01T09:10:00Z")
         val reminderId = repository.createReminder(
-            input().copy(firstOccurrence = LocalDateTime.of(2026, 1, 2, 9, 0)),
+            input().copy(
+                firstOccurrence = LocalDateTime.of(2026, 1, 2, 9, 0),
+                intervalUnit = IntervalUnit.WEEKS,
+            ),
             utc,
-            futureNow,
+            scheduledNow,
         )
         val preview = database.tomorrowPreviewDao().getByReminderId(reminderId)!!
 
@@ -118,17 +122,57 @@ class ReminderRepositoryTest {
                 reminderId,
                 expectedRevision = preview.revision,
                 zoneId = utc,
-                now = futureNow,
+                now = lateSeenNow,
             ),
         )
         assertEquals(
             RepositoryActionResult.ALREADY_ACKNOWLEDGED,
-            repository.acknowledgeTomorrow(reminderId, zoneId = utc, now = futureNow),
+            repository.acknowledgeTomorrow(reminderId, zoneId = utc, now = lateSeenNow),
         )
 
         assertTrue(database.tomorrowPreviewDao().getByReminderId(reminderId)!!.acknowledged)
         assertNull(database.outstandingDueDao().getByReminderId(reminderId))
         assertEquals(listOf("TOMORROW_SEEN"), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+    }
+
+    @Test
+    fun dailyOneDayReminderNeverPersistsATomorrowPreview() = runBlocking {
+        val reminderId = repository.createReminder(
+            input().copy(firstOccurrence = LocalDateTime.of(2026, 1, 2, 9, 0)),
+            utc,
+            Instant.parse("2026-01-01T08:00:00Z"),
+        )
+
+        assertNull(database.tomorrowPreviewDao().getByReminderId(reminderId))
+    }
+
+    @Test
+    fun staleTomorrowRevisionIsRejectedAfterTimezoneReschedule() = runBlocking {
+        val scheduledNow = Instant.parse("2025-12-31T23:00:00Z")
+        val reminderId = repository.createReminder(
+            input().copy(
+                firstOccurrence = LocalDateTime.of(2026, 1, 2, 9, 0),
+                intervalUnit = IntervalUnit.WEEKS,
+            ),
+            utc,
+            scheduledNow,
+        )
+        val original = database.tomorrowPreviewDao().getByReminderId(reminderId)!!
+        val tokyo = ZoneId.of("Asia/Tokyo")
+
+        assertEquals(RepositoryActionResult.APPLIED, repository.reconcileReminder(reminderId, tokyo, scheduledNow))
+        val rescheduled = database.tomorrowPreviewDao().getByReminderId(reminderId)!!
+        assertTrue(rescheduled.revision > original.revision)
+
+        assertEquals(
+            RepositoryActionResult.STALE_REVISION,
+            repository.acknowledgeTomorrow(
+                reminderId,
+                expectedRevision = original.revision,
+                zoneId = tokyo,
+                now = scheduledNow,
+            ),
+        )
     }
 
     @Test

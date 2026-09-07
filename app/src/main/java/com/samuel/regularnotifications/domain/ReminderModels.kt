@@ -82,6 +82,17 @@ data class TomorrowPreviewState(
     val revision: Long,
 )
 
+/**
+ * A lifecycle derived from the persisted preview timestamps and acknowledgement.
+ * It is not stored separately because the existing row already represents it.
+ */
+enum class TomorrowPreviewLifecycle {
+    SCHEDULED,
+    CURRENT,
+    ACKNOWLEDGED,
+    OBSOLETE,
+}
+
 data class ReminderScheduleState(
     val nextNormal: NormalOccurrence,
     val outstandingDue: OutstandingDueState?,

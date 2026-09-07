@@ -38,17 +38,30 @@ class ReminderStateMachineTest {
 
     @Test
     fun futureReminderGetsOneTomorrowPreviewAndAcknowledgementDoesNotMutateSchedule() {
-        val definition = definition(LocalDateTime.of(2026, 1, 2, 9, 0))
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
         val now = instant("2026-01-01T08:00:00Z")
 
         val state = ReminderStateMachine.initial(definition, now, utc)
         val acknowledged = ReminderStateMachine.acknowledgeTomorrow(state)
         val repeatedAcknowledgement = ReminderStateMachine.acknowledgeTomorrow(acknowledged)
+        val scheduledPreview = checkNotNull(state.tomorrowPreview)
+        val acknowledgedPreview = checkNotNull(acknowledged.tomorrowPreview)
 
         assertEquals(0, state.nextNormal.index)
-        assertEquals(0L, state.tomorrowPreview?.normalOccurrenceIndex)
-        assertFalse(state.tomorrowPreview!!.acknowledged)
-        assertTrue(acknowledged.tomorrowPreview!!.acknowledged)
+        assertEquals(0L, scheduledPreview.normalOccurrenceIndex)
+        assertFalse(scheduledPreview.acknowledged)
+        assertEquals(
+            TomorrowPreviewLifecycle.SCHEDULED,
+            ReminderStateMachine.tomorrowPreviewLifecycle(scheduledPreview, now, false),
+        )
+        assertTrue(acknowledgedPreview.acknowledged)
+        assertEquals(
+            TomorrowPreviewLifecycle.ACKNOWLEDGED,
+            ReminderStateMachine.tomorrowPreviewLifecycle(acknowledgedPreview, now, false),
+        )
         assertEquals(state.nextNormal, acknowledged.nextNormal)
         assertNull(acknowledged.outstandingDue)
         assertEquals(acknowledged, repeatedAcknowledgement)
@@ -56,7 +69,10 @@ class ReminderStateMachineTest {
 
     @Test
     fun tomorrowPreviewIsSuppressedWhenDueOrPastItsPreviewWindow() {
-        val definition = definition(LocalDateTime.of(2026, 1, 2, 9, 0))
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
 
         val beforePreview = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
         val previewExpired = ReminderStateMachine.initial(definition, instant("2026-01-02T08:30:00Z"), utc)
@@ -66,6 +82,19 @@ class ReminderStateMachineTest {
         assertNull(previewExpired.tomorrowPreview)
         assertEquals(0L, due.outstandingDue?.normalOccurrenceIndex)
         assertNull(due.tomorrowPreview)
+    }
+
+    @Test
+    fun missingLatePreviewIsNotRecreatedDuringRecovery() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
+
+        val recovered = ReminderStateMachine.initial(definition, instant("2026-01-01T09:10:00Z"), utc)
+
+        assertNull(recovered.tomorrowPreview)
+        assertEquals(0L, recovered.nextNormal.index)
     }
 
     @Test
@@ -135,7 +164,10 @@ class ReminderStateMachineTest {
 
     @Test
     fun reconcileKeepsAcknowledgedTomorrowStateForTheSameNormalOccurrence() {
-        val definition = definition(LocalDateTime.of(2026, 1, 2, 9, 0))
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
         val initial = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
         val acknowledged = ReminderStateMachine.acknowledgeTomorrow(initial)
 
@@ -148,6 +180,127 @@ class ReminderStateMachineTest {
 
         assertEquals(acknowledged.tomorrowPreview, reconciled.tomorrowPreview)
         assertEquals(acknowledged.nextNormal, reconciled.nextNormal)
+    }
+
+    @Test
+    fun dailyOneDayRecurrenceNeverCreatesTomorrowPreview() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.DAYS,
+            intervalAmount = 1,
+        )
+
+        val state = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
+
+        assertFalse(ReminderStateMachine.supportsTomorrowPreview(definition))
+        assertNull(state.tomorrowPreview)
+    }
+
+    @Test
+    fun nonDailyEligibleRecurrenceCreatesTomorrowPreview() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.DAYS,
+            intervalAmount = 2,
+        )
+
+        val state = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
+
+        assertTrue(ReminderStateMachine.supportsTomorrowPreview(definition))
+        assertEquals(0L, state.tomorrowPreview?.normalOccurrenceIndex)
+    }
+
+    @Test
+    fun persistedPreviewBecomesCurrentInsteadOfObsoleteAfterItsDeliveryTime() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
+        val scheduled = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
+
+        val late = ReminderStateMachine.reconcile(
+            definition,
+            scheduled,
+            now = instant("2026-01-01T09:10:00Z"),
+            zoneId = utc,
+        )
+        val preview = checkNotNull(late.tomorrowPreview)
+
+        assertEquals(1L, preview.revision)
+        assertEquals(
+            TomorrowPreviewLifecycle.CURRENT,
+            ReminderStateMachine.tomorrowPreviewLifecycle(preview, instant("2026-01-01T09:10:00Z"), false),
+        )
+    }
+
+    @Test
+    fun previewForANowDueTargetIsDiscardedInsteadOfReplayed() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
+        val scheduled = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
+        val scheduledPreview = checkNotNull(scheduled.tomorrowPreview)
+
+        val recovered = ReminderStateMachine.reconcile(
+            definition,
+            scheduled,
+            now = instant("2026-01-02T10:00:00Z"),
+            zoneId = utc,
+        )
+
+        assertEquals(
+            TomorrowPreviewLifecycle.OBSOLETE,
+            ReminderStateMachine.tomorrowPreviewLifecycle(
+                scheduledPreview,
+                instant("2026-01-02T10:00:00Z"),
+                hasOutstandingDue = false,
+            ),
+        )
+        assertEquals(0L, recovered.outstandingDue?.normalOccurrenceIndex)
+        assertNull(recovered.tomorrowPreview)
+    }
+
+    @Test
+    fun unchangedPreviewReconciliationKeepsItsRevision() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
+        val initial = ReminderStateMachine.initial(definition, instant("2026-01-01T08:00:00Z"), utc)
+
+        val reconciled = ReminderStateMachine.reconcile(
+            definition,
+            initial,
+            now = instant("2026-01-01T08:30:00Z"),
+            zoneId = utc,
+        )
+
+        assertEquals(initial.tomorrowPreview?.revision, reconciled.tomorrowPreview?.revision)
+        assertEquals(initial.tomorrowPreview, reconciled.tomorrowPreview)
+    }
+
+    @Test
+    fun timezoneRescheduleOfSamePreviewTargetIncrementsRevision() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 2, 9, 0),
+            intervalUnit = IntervalUnit.WEEKS,
+        )
+        val now = instant("2025-12-31T23:00:00Z")
+        val initial = ReminderStateMachine.initial(definition, now, utc)
+
+        val rescheduled = ReminderStateMachine.reconcile(
+            definition,
+            initial,
+            now = now,
+            zoneId = ZoneId.of("Asia/Tokyo"),
+        )
+        val initialPreview = checkNotNull(initial.tomorrowPreview)
+        val rescheduledPreview = checkNotNull(rescheduled.tomorrowPreview)
+
+        assertEquals(initialPreview.normalOccurrenceIndex, rescheduledPreview.normalOccurrenceIndex)
+        assertEquals(initialPreview.revision + 1, rescheduledPreview.revision)
+        assertNotEquals(initialPreview.previewEpochMillis, rescheduledPreview.previewEpochMillis)
     }
 
     @Test
@@ -178,7 +331,11 @@ class ReminderStateMachineTest {
         assertNull(afterTravel.outstandingDue)
     }
 
-    private fun definition(anchor: LocalDateTime): ReminderDefinition = ReminderDefinition(
+    private fun definition(
+        anchor: LocalDateTime,
+        intervalUnit: IntervalUnit = IntervalUnit.DAYS,
+        intervalAmount: Int = 1,
+    ): ReminderDefinition = ReminderDefinition(
         id = 1,
         title = "Test reminder",
         description = null,
@@ -186,8 +343,8 @@ class ReminderStateMachineTest {
         anchorLocalDate = anchor.toLocalDate(),
         anchorLocalTime = anchor.toLocalTime(),
         durationAnchor = anchor.toInstant(utc.rules.getOffset(anchor)),
-        intervalAmount = 1,
-        intervalUnit = IntervalUnit.DAYS,
+        intervalAmount = intervalAmount,
+        intervalUnit = intervalUnit,
     )
 
     private fun instant(value: String): Instant = Instant.parse(value)

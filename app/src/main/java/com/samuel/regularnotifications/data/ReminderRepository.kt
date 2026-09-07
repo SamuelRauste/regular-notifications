@@ -213,9 +213,20 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
-        val normalized = normalize(id, now, zoneId)
+        val reminder = reminderDao.getById(id)
             ?: return@withTransaction RepositoryActionResult.NOT_FOUND
-        val preview = normalized.state.tomorrowPreview
+        val persistedPreview = tomorrowPreviewDao.getByReminderId(id)
+            ?: return@withTransaction RepositoryActionResult.NO_TOMORROW_PREVIEW
+        if (persistedPreview.acknowledged) {
+            return@withTransaction RepositoryActionResult.ALREADY_ACKNOWLEDGED
+        }
+
+        // Reconciliation preserves a current (slightly late) preview. It can
+        // still discard an actually obsolete one, such as a target occurrence
+        // that is now due. Check the resulting revision rather than accepting
+        // a stale action tied to the pre-reschedule state.
+        val reconciled = reconcileStored(reminder, now, zoneId)
+        val preview = reconciled.tomorrowPreview
             ?: return@withTransaction RepositoryActionResult.NO_TOMORROW_PREVIEW
         if (preview.acknowledged) {
             return@withTransaction RepositoryActionResult.ALREADY_ACKNOWLEDGED
@@ -224,8 +235,8 @@ class ReminderRepository(
             return@withTransaction RepositoryActionResult.STALE_REVISION
         }
 
-        val acknowledged = ReminderStateMachine.acknowledgeTomorrow(normalized.state)
-        persistSchedule(normalized.reminder, acknowledged, now, zoneId)
+        val acknowledged = ReminderStateMachine.acknowledgeTomorrow(reconciled)
+        persistSchedule(requireNotNull(reminderDao.getById(id)), acknowledged, now, zoneId)
         eventDao.insert(
             ReminderEventEntity(
                 reminderId = id,

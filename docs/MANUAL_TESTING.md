@@ -27,6 +27,8 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Verify repeated +1 day actions update one postponement rather than creating additional due states.
 - [ ] Verify a newer normal occurrence collapses an older/postponed due state into one outstanding due state.
 - [ ] Verify event history records Done, Dismiss, +1 day, and Tomorrow Seen independently of the recurrence definition.
+- [ ] Verify an every-1-day reminder never creates a Tomorrow notification, even after restart, edit, or rescheduling.
+- [ ] Verify an eligible non-daily reminder creates at most one Tomorrow preview.
 
 ## Notifications and actions
 
@@ -37,6 +39,7 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Verify Dismiss removes the notification, records dismissal, and preserves recurrence.
 - [ ] Verify “+1 day” removes the notification, postpones only that displayed occurrence, and leaves the recurrence anchor and normal schedule unchanged.
 - [ ] Verify the Tomorrow preview says “Tomorrow: …”, has only one `Seen` action, and does not count as Done or Dismiss.
+- [ ] Deliver a Tomorrow notification a few minutes late, then press Seen; verify it is still acknowledged and records exactly one `TOMORROW_SEEN` event.
 - [ ] Verify acknowledging a Tomorrow preview prevents it from returning after process death, reboot, or rescheduling.
 - [ ] Verify an overdue/outstanding reminder suppresses its Tomorrow preview.
 - [ ] Swipe a notification away and verify the documented dismissal behavior.
@@ -48,6 +51,8 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Verify a daily 09:00 reminder remains 09:00 after changing from Finland to Japan time.
 - [ ] Verify minute/hour reminders remain duration-based across a time-zone change.
 - [ ] Verify only relevant future Tomorrow previews remain after recovery; obsolete previews are not replayed.
+- [ ] Verify a preview whose target reminder is now due/past is discarded during recovery, while a slightly late preview for a still-future target remains acknowledgeable.
+- [ ] Change time zone while an eligible Tomorrow preview is pending and verify only the newly scheduled preview/action remains usable.
 - [ ] Test a day/week reminder across a daylight-saving transition when available.
 - [ ] Test battery saver/doze and record normal Android timing delays.
 - [ ] Close/reopen the app after process death and verify reminders remain correct.

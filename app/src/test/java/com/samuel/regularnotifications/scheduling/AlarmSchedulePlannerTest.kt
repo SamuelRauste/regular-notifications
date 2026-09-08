@@ -63,6 +63,19 @@ class AlarmSchedulePlannerTest {
     }
 
     @Test
+    fun globallyPausedReminderSchedulesNothingWithoutChangingItsIndividualFlag() {
+        val snapshot = snapshot(
+            intervalDays = 7,
+            masterEnabled = false,
+            outstandingDue = due(revision = 2),
+            tomorrowPreview = preview(revision = 3),
+        )
+
+        assertEquals(AlarmSchedulePlan(null, null), AlarmSchedulePlanner.plan(snapshot, now))
+        assertTrue(snapshot.definition.enabled)
+    }
+
+    @Test
     fun dailyReminderNeverSchedulesTomorrowAndDueSuppressesPreview() {
         val daily = snapshot(intervalDays = 1, tomorrowPreview = preview(revision = 1))
         val dueSnapshot = snapshot(
@@ -106,6 +119,17 @@ class AlarmSchedulePlannerTest {
     }
 
     @Test
+    fun staleDeliveryIsRejectedWhileMasterSwitchIsOff() {
+        val snapshot = snapshot(
+            intervalDays = 7,
+            masterEnabled = false,
+            outstandingDue = due(revision = 4),
+        )
+
+        assertFalse(AlarmDeliveryDecisions.shouldPostDue(snapshot, expectedRevision = 4, now = now))
+    }
+
+    @Test
     fun tomorrowDeliveryRequiresCurrentUnacknowledgedPreview() {
         val current = snapshot(
             intervalDays = 7,
@@ -131,6 +155,7 @@ class AlarmSchedulePlannerTest {
     private fun snapshot(
         intervalDays: Int,
         enabled: Boolean = true,
+        masterEnabled: Boolean = true,
         outstandingDue: OutstandingDueState? = null,
         tomorrowPreview: TomorrowPreviewState? = null,
     ): ReminderSchedulingSnapshot {
@@ -154,6 +179,7 @@ class AlarmSchedulePlannerTest {
                 outstandingDue = outstandingDue,
                 tomorrowPreview = tomorrowPreview,
             ),
+            masterEnabled = masterEnabled,
         )
     }
 

@@ -16,12 +16,15 @@ data class ReminderListItem(
     val enabled: Boolean,
     val intervalDays: Int,
     val nextOccurrence: String,
+    val masterEnabled: Boolean = true,
 ) {
     val recurrence: String
         get() = everyDaysLabel(intervalDays)
 
     val scheduleSummary: String
-        get() = if (enabled) {
+        get() = if (enabled && !masterEnabled) {
+            "$recurrence - Globally paused"
+        } else if (enabled) {
             "$recurrence · Next: $nextOccurrence"
         } else {
             "$recurrence · Paused"
@@ -31,6 +34,8 @@ data class ReminderListItem(
 data class ReminderListUiState(
     val isLoading: Boolean = true,
     val reminders: List<ReminderListItem> = emptyList(),
+    val masterEnabled: Boolean = true,
+    val isMasterUpdating: Boolean = false,
     val errorMessage: String? = null,
 )
 
@@ -54,7 +59,10 @@ sealed interface ReminderEditorEvent {
 fun everyDaysLabel(intervalDays: Int): String =
     "Every $intervalDays ${if (intervalDays == 1) "day" else "days"}"
 
-internal fun ReminderEntity.toReminderListItem(zoneId: ZoneId = ZoneId.systemDefault()): ReminderListItem =
+internal fun ReminderEntity.toReminderListItem(
+    masterEnabled: Boolean = true,
+    zoneId: ZoneId = ZoneId.systemDefault(),
+): ReminderListItem =
     ReminderListItem(
         id = id,
         title = title,
@@ -64,4 +72,5 @@ internal fun ReminderEntity.toReminderListItem(zoneId: ZoneId = ZoneId.systemDef
         nextOccurrence = Instant.ofEpochMilli(nextNormalOccurrenceEpochMillis)
             .atZone(zoneId)
             .format(DateTimeFormatter.ofPattern("EEE d MMM, HH:mm", Locale.getDefault())),
+        masterEnabled = masterEnabled,
     )

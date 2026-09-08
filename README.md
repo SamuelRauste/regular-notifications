@@ -9,12 +9,13 @@ advertisements, or network access.
 
 ## Status
 
-Phase 4 is complete: enabled reminders now use Room-derived, one-shot inexact
-AlarmManager scheduling, alarm delivery, startup reconciliation, and boot/clock/
-time-zone recovery. The app can create, view, edit, enable, disable, and delete
-local reminders through a short Compose/Material 3 interface. Notification
-action processing remains Phase 5. Android instrumentation tests compile but
-still need a usable phone or emulator to run.
+Phase 4 is complete, followed by a corrective pass for global pause and
+notification-permission recovery. Enabled reminders use Room-derived, one-shot
+inexact AlarmManager scheduling, alarm delivery, startup reconciliation, and
+boot/clock/time-zone recovery. The app can create, view, edit, enable, disable,
+and permanently delete local reminders through a short Compose/Material 3
+interface. Notification action processing remains Phase 5. Android
+instrumentation tests compile but still need a usable phone or emulator to run.
 
 ## Prerequisites
 
@@ -60,6 +61,16 @@ disabled are ignored without history events; re-enabling resumes at the next
 future occurrence on the original Every-X-days anchor rather than creating a
 backlog or restarting the schedule.
 
+The list also has a persisted `All reminders` switch. It is separate from each
+reminder's individual enabled switch and from Android's notification permission.
+When the master switch is off, all DUE and TOMORROW alarms and visible reminder
+notifications are cancelled, but reminder definitions and individual switches
+remain unchanged. Occurrences that pass during the global pause are skipped
+without fake Done/Dismiss history; turning the switch back on resumes at the
+next future occurrence on each original anchor, without an overdue backlog.
+The individual switch still behaves independently, so an individually disabled
+reminder remains disabled after a global pause/resume.
+
 ## Using the app
 
 The main screen is a simple reminder list. Each card shows its title, repeat
@@ -70,7 +81,13 @@ Every 1 day. Tomorrow previews are automatic for intervals of 2 or more days;
 there is no preview setting in the form. Enabled reminders are scheduled from
 Room state using one-shot inexact `AlarmManager.setAndAllowWhileIdle` alarms.
 The app reconciles alarms at startup and after reboot, clock changes, and
-time-zone changes. Notification action buttons remain inert until Phase 5.
+time-zone changes. It does not need to remain visible, stay in Recents, keep a
+foreground service running, or show an "app is running" notification. Android
+can terminate the process and later start the alarm receiver when an alarm is
+due. Edit is the way to correct a title/description typo or change a schedule.
+Delete is permanent: confirmation removes the Room reminder/history and both
+derived alarm and visible-notification kinds. Notification action buttons
+remain inert until Phase 5.
 
 ## Inspect Phase 3 notifications
 
@@ -101,15 +118,20 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 On Android 13 and newer, the app asks for `POST_NOTIFICATIONS` only after the
 user taps the non-blocking permission banner. Denial does not prevent reminder
 management; the banner offers Android notification settings when another
-permission prompt is no longer appropriate. Delivery depends on Android's
-alarm and battery-management policies. The scheduler uses reasonably punctual
+permission prompt is no longer appropriate. If a reminder becomes due while
+permission is denied, its Room due state is retained. When permission changes
+to granted, the app performs a one-time scheduling reconciliation so that
+outstanding work can be delivered without restarting the app or changing the
+clock. Delivery depends on Android's alarm and battery-management policies. The
+scheduler uses reasonably punctual
 inexact one-shot `AlarmManager` alarms and does not request exact-alarm special
 access.
 
 Every-X-days recurrences preserve local wall-clock time across daylight-saving
 and time-zone changes. Android may delay alarms, especially in battery saver or
-doze modes. If the user force-stops the app, Android may suppress its alarms
-and receivers until the app is opened again.
+doze modes. If the user explicitly force-stops the app from Android system
+settings, Android may suppress its alarms and broadcast receivers until the app
+is opened again. The app does not attempt to bypass that platform limitation.
 
 ## Documentation
 

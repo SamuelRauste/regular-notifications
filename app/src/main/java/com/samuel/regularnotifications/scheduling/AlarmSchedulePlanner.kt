@@ -15,7 +15,9 @@ object AlarmSchedulePlanner {
         snapshot: ReminderSchedulingSnapshot,
         now: Instant,
     ): AlarmSchedulePlan {
-        if (!snapshot.definition.enabled) return AlarmSchedulePlan(null, null)
+        if (!snapshot.masterEnabled || !snapshot.definition.enabled) {
+            return AlarmSchedulePlan(null, null)
+        }
 
         val nowEpochMillis = now.toEpochMilli()
         val dueTrigger = snapshot.state.outstandingDue?.dueAtEpochMillis
@@ -45,7 +47,7 @@ object AlarmDeliveryDecisions {
         expectedRevision: Long,
         now: Instant,
     ): Boolean {
-        if (!snapshot.definition.enabled) return false
+        if (!snapshot.masterEnabled || !snapshot.definition.enabled) return false
         val due = snapshot.state.outstandingDue ?: return false
         if (due.dueAtEpochMillis > now.toEpochMilli()) return false
         return expectedRevision == 0L || due.revision == expectedRevision
@@ -56,7 +58,10 @@ object AlarmDeliveryDecisions {
         expectedRevision: Long,
         now: Instant,
     ): Boolean {
-        if (!snapshot.definition.enabled || !supportsTomorrow(snapshot.definition.intervalDays)) {
+        if (!snapshot.masterEnabled ||
+            !snapshot.definition.enabled ||
+            !supportsTomorrow(snapshot.definition.intervalDays)
+        ) {
             return false
         }
         if (snapshot.state.outstandingDue != null) return false

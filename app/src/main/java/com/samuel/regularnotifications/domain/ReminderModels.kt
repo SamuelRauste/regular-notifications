@@ -98,6 +98,7 @@ data class ReminderScheduleState(
 data class ReminderSchedulingSnapshot(
     val definition: ReminderDefinition,
     val state: ReminderScheduleState,
+    val masterEnabled: Boolean = true,
 )
 
 enum class ReminderEventType {

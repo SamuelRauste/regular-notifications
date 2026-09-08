@@ -14,6 +14,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -35,7 +36,9 @@ private const val PREFERENCES_NAME = "notification_preferences"
 private const val REQUEST_PRESENTED_KEY = "post_notifications_request_presented"
 
 @Composable
-fun rememberNotificationPermissionController(): NotificationPermissionController {
+fun rememberNotificationPermissionController(
+    onPermissionGranted: () -> Unit = {},
+): NotificationPermissionController {
     val context = LocalContext.current
     val activity = context as? Activity
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -48,10 +51,21 @@ fun rememberNotificationPermissionController(): NotificationPermissionController
     var requestAlreadyPresented by remember(context) {
         mutableStateOf(preferences.getBoolean(REQUEST_PRESENTED_KEY, false))
     }
+    val onPermissionGrantedState = rememberUpdatedState(onPermissionGranted)
+
+    fun refreshPermissionState() {
+        val updatedPermissionGranted = hasNotificationPermission(context)
+        val wasPermissionGranted = permissionGranted
+        permissionGranted = updatedPermissionGranted
+        if (notificationPermissionBecameGranted(wasPermissionGranted, updatedPermissionGranted)) {
+            onPermissionGrantedState.value()
+        }
+    }
+
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
-        permissionGranted = hasNotificationPermission(context)
+        refreshPermissionState()
         requestAlreadyPresented = true
         preferences.edit().putBoolean(REQUEST_PRESENTED_KEY, true).apply()
     }
@@ -59,7 +73,7 @@ fun rememberNotificationPermissionController(): NotificationPermissionController
     DisposableEffect(lifecycleOwner, context) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                permissionGranted = hasNotificationPermission(context)
+                refreshPermissionState()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

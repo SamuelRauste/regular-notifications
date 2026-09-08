@@ -4,6 +4,17 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 
+@Entity(tableName = "app_settings")
+data class AppSettingsEntity(
+    @androidx.room.PrimaryKey
+    val id: Int = SINGLETON_ID,
+    val masterEnabled: Boolean = true,
+) {
+    companion object {
+        const val SINGLETON_ID = 1
+    }
+}
+
 @Entity(tableName = "reminders")
 data class ReminderEntity(
     @androidx.room.PrimaryKey(autoGenerate = true)

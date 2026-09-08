@@ -75,10 +75,22 @@ class AlarmManagerReminderScheduler(
         }
 
         if (validDelivery) {
-            postNotification(snapshot, request.kind)
-            // The one-shot alarm has done its work. Do not immediately
-            // recreate the same alarm while the notification remains visible.
-            applyPlan(snapshot, now, skipKind = request.kind)
+            val posted = postNotification(snapshot, request.kind)
+            if (posted) {
+                // The one-shot alarm has done its work. Do not immediately
+                // recreate the same alarm while the notification remains visible.
+                applyPlan(
+                    snapshot = snapshot,
+                    now = now,
+                    skipKind = request.kind,
+                    preserveNotificationKind = request.kind,
+                )
+            } else {
+                // A denied POST_NOTIFICATIONS permission must not cause a
+                // tight immediate-alarm retry loop. Keep Room's outstanding
+                // state intact and wait for permission-granted reconciliation.
+                applyPlan(snapshot, now, skipKind = request.kind)
+            }
         } else {
             Log.d(
                 TAG,
@@ -120,6 +132,7 @@ class AlarmManagerReminderScheduler(
         snapshot: ReminderSchedulingSnapshot,
         now: Instant,
         skipKind: NotificationKind? = null,
+        preserveNotificationKind: NotificationKind? = null,
     ) {
         val plan = AlarmSchedulePlanner.plan(snapshot, now)
 
@@ -133,6 +146,9 @@ class AlarmManagerReminderScheduler(
             )
         } else {
             cancelDue(snapshot.definition.id)
+            if (preserveNotificationKind != NotificationKind.DUE) {
+                notificationManager.cancelDue(snapshot.definition.id)
+            }
         }
 
         if (skipKind != NotificationKind.TOMORROW &&
@@ -147,6 +163,9 @@ class AlarmManagerReminderScheduler(
             )
         } else {
             cancelTomorrow(snapshot.definition.id)
+            if (preserveNotificationKind != NotificationKind.TOMORROW) {
+                notificationManager.cancelTomorrow(snapshot.definition.id)
+            }
         }
     }
 
@@ -172,7 +191,7 @@ class AlarmManagerReminderScheduler(
     private fun postNotification(
         snapshot: ReminderSchedulingSnapshot,
         kind: NotificationKind,
-    ) {
+    ): Boolean {
         val revision = when (kind) {
             NotificationKind.DUE -> requireNotNull(snapshot.state.outstandingDue).revision
             NotificationKind.TOMORROW -> requireNotNull(snapshot.state.tomorrowPreview).revision
@@ -184,7 +203,7 @@ class AlarmManagerReminderScheduler(
             intervalDays = snapshot.definition.intervalDays,
             expectedRevision = revision,
         )
-        when (kind) {
+        return when (kind) {
             NotificationKind.DUE -> notificationManager.postDue(input)
             NotificationKind.TOMORROW -> notificationManager.postTomorrow(input)
         }

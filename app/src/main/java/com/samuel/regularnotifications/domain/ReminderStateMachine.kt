@@ -52,10 +52,11 @@ object ReminderStateMachine {
 
     /**
      * Advances the resolved/skipped cursor over every occurrence that is due
-     * while a reminder is intentionally disabled. No user event is recorded:
+     * while delivery is intentionally inactive, whether the individual
+     * reminder or the global master switch is off. No user event is recorded:
      * these occurrences never produced a notification for the user to resolve.
      */
-    fun skipDisabledOccurrences(
+    fun skipInactiveOccurrences(
         definition: ReminderDefinition,
         current: ReminderScheduleState,
         now: Instant,
@@ -80,6 +81,17 @@ object ReminderStateMachine {
             lastResolvedNormalOccurrenceIndex = latestSkippedIndex.takeIf { it >= 0 },
         )
     }
+
+    /**
+     * Compatibility name for the original individual-disable operation.
+     * Individual and global pauses intentionally share the same cursor rules.
+     */
+    fun skipDisabledOccurrences(
+        definition: ReminderDefinition,
+        current: ReminderScheduleState,
+        now: Instant,
+        zoneId: ZoneId,
+    ): ReminderScheduleState = skipInactiveOccurrences(definition, current, now, zoneId)
 
     /** Every-1-day reminders deliberately have no Tomorrow preview. */
     fun supportsTomorrowPreview(definition: ReminderDefinition): Boolean =

@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -39,6 +39,43 @@ class ReminderListViewModel(
         }
     }
 
+    fun setMasterEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isMasterUpdating = true,
+                    errorMessage = null,
+                )
+            }
+            val result = try {
+                service.setMasterEnabled(enabled)
+            } catch (error: Throwable) {
+                if (error is CancellationException) throw error
+                _uiState.update {
+                    it.copy(
+                        isMasterUpdating = false,
+                        errorMessage = "Could not update all reminders. Try again.",
+                    )
+                }
+                return@launch
+            }
+            _uiState.update {
+                it.copy(
+                    isMasterUpdating = false,
+                    errorMessage = if (result == RepositoryActionResult.APPLIED) {
+                        null
+                    } else {
+                        "Could not update all reminders. Try again."
+                    },
+                )
+            }
+        }
+    }
+
+    fun onNotificationPermissionGranted() {
+        refreshDerivedSchedule()
+    }
+
     fun retry() {
         _uiState.update { it.copy(errorMessage = null) }
         refreshDerivedSchedule()
@@ -50,8 +87,12 @@ class ReminderListViewModel(
 
     private fun observeReminders() {
         viewModelScope.launch {
-            service.observeReminders()
-                .map { reminders -> reminders.map { it.toReminderListItem() } }
+            combine(
+                service.observeMasterEnabled(),
+                service.observeReminders(),
+            ) { masterEnabled, reminders ->
+                masterEnabled to reminders.map { it.toReminderListItem(masterEnabled) }
+            }
                 .catch { error ->
                     if (error is CancellationException) throw error
                     _uiState.update {
@@ -61,11 +102,12 @@ class ReminderListViewModel(
                         )
                     }
                 }
-                .collect { reminders ->
+                .collect { (masterEnabled, reminders) ->
                     _uiState.update {
                         it.copy(
                             isLoading = false,
                             reminders = reminders,
+                            masterEnabled = masterEnabled,
                         )
                     }
                 }

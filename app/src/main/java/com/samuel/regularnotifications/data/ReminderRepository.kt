@@ -1,6 +1,7 @@
 package com.samuel.regularnotifications.data
 
 import androidx.room.withTransaction
+import com.samuel.regularnotifications.data.local.AppSettingsEntity
 import com.samuel.regularnotifications.data.local.OutstandingDueEntity
 import com.samuel.regularnotifications.data.local.ReminderDatabase
 import com.samuel.regularnotifications.data.local.ReminderEntity
@@ -19,6 +20,7 @@ import com.samuel.regularnotifications.domain.toDefinition
 import java.time.Instant
 import java.time.ZoneId
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 enum class RepositoryActionResult {
     APPLIED,
@@ -33,6 +35,7 @@ class ReminderRepository(
     private val database: ReminderDatabase,
     private val clock: () -> Instant = { Instant.now() },
 ) {
+    private val appSettingsDao = database.appSettingsDao()
     private val reminderDao = database.reminderDao()
     private val outstandingDueDao = database.outstandingDueDao()
     private val tomorrowPreviewDao = database.tomorrowPreviewDao()
@@ -40,10 +43,68 @@ class ReminderRepository(
 
     fun observeReminders(): Flow<List<ReminderEntity>> = reminderDao.observeAll()
 
+    fun observeMasterEnabled(): Flow<Boolean> =
+        appSettingsDao.observeMasterEnabled().map { it ?: true }
+
     fun observeReminder(id: Long): Flow<ReminderEntity?> = reminderDao.observeById(id)
 
     fun observeEvents(reminderId: Long): Flow<List<ReminderEventEntity>> =
         eventDao.observeForReminder(reminderId)
+
+    suspend fun getMasterEnabled(): Boolean = database.withTransaction {
+        ensureMasterEnabled()
+    }
+
+    /**
+     * Persists the global delivery switch and reconciles every reminder in the
+     * same Room transaction. A global pause uses the same inactive-occurrence
+     * cursor operation as an individual pause, so occurrences are skipped
+     * without creating fake history or changing each reminder's enabled flag.
+     */
+    suspend fun setMasterEnabled(
+        enabled: Boolean,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        now: Instant = clock(),
+    ): RepositoryActionResult = database.withTransaction {
+        val wasMasterEnabled = ensureMasterEnabled()
+        val reminders = reminderDao.getAll()
+        if (!enabled && wasMasterEnabled) {
+            appSettingsDao.upsert(AppSettingsEntity(masterEnabled = false))
+            reminders.forEach { reminder ->
+                reconcileStored(
+                    reminder = reminder,
+                    now = now,
+                    zoneId = zoneId,
+                    masterEnabled = false,
+                )
+            }
+            return@withTransaction RepositoryActionResult.APPLIED
+        }
+
+        // If the app was globally paused while the process was dead, advance
+        // every reminder's inactive cursor before turning delivery back on.
+        // This prevents the disabled period from becoming an overdue backlog.
+        if (enabled && !wasMasterEnabled) {
+            reminders.forEach { reminder ->
+                reconcileStored(
+                    reminder = reminder,
+                    now = now,
+                    zoneId = zoneId,
+                    masterEnabled = false,
+                )
+            }
+        }
+        appSettingsDao.upsert(AppSettingsEntity(masterEnabled = enabled))
+        reminders.forEach { reminder ->
+            reconcileStored(
+                reminder = reminder,
+                now = now,
+                zoneId = zoneId,
+                masterEnabled = enabled,
+            )
+        }
+        RepositoryActionResult.APPLIED
+    }
 
     suspend fun createReminder(
         draft: ReminderDraft,
@@ -60,6 +121,7 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): Long = database.withTransaction {
+        val masterEnabled = ensureMasterEnabled()
         val definition = input.toDefinition(id = 0)
         val nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId)
         val entity = definition.toEntity(
@@ -71,7 +133,7 @@ class ReminderRepository(
         )
         val id = reminderDao.insert(entity)
         val inserted = requireNotNull(reminderDao.getById(id))
-        reconcileStored(inserted, now, zoneId)
+        reconcileStored(inserted, now, zoneId, masterEnabled)
         id
     }
 
@@ -81,6 +143,7 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
+        val masterEnabled = ensureMasterEnabled()
         val existing = reminderDao.getById(id) ?: return@withTransaction RepositoryActionResult.NOT_FOUND
         val definition = input.toDefinition(id = id)
         val nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId)
@@ -100,7 +163,7 @@ class ReminderRepository(
         // new definition, so use a fresh cursor while skipping any occurrences
         // already past rather than recovering them as enabled missed work.
         if (!existing.enabled && input.enabled) {
-            val skipped = ReminderStateMachine.skipDisabledOccurrences(
+            val skipped = ReminderStateMachine.skipInactiveOccurrences(
                 definition = definition,
                 current = ReminderScheduleState(
                     nextNormal = nextNormal,
@@ -113,7 +176,7 @@ class ReminderRepository(
             )
             persistSchedule(requireNotNull(reminderDao.getById(id)), skipped, now, zoneId)
         }
-        reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId)
+        reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId, masterEnabled)
         RepositoryActionResult.APPLIED
     }
 
@@ -123,11 +186,12 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
+        val masterEnabled = ensureMasterEnabled()
         val existing = reminderDao.getById(id) ?: return@withTransaction RepositoryActionResult.NOT_FOUND
         if (existing.enabled == enabled) {
-            reconcileStored(existing, now, zoneId)
+            reconcileStored(existing, now, zoneId, masterEnabled)
         } else {
-            val skipped = ReminderStateMachine.skipDisabledOccurrences(
+            val skipped = ReminderStateMachine.skipInactiveOccurrences(
                 definition = existing.toDefinition(),
                 current = loadState(existing),
                 now = now,
@@ -143,7 +207,7 @@ class ReminderRepository(
             // Reconcile after enabling so the next future occurrence can get
             // its normal derived state (for example, a new Tomorrow preview).
             if (enabled) {
-                reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId)
+                reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId, masterEnabled)
             }
         }
         RepositoryActionResult.APPLIED
@@ -162,8 +226,9 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
+        val masterEnabled = ensureMasterEnabled()
         val reminder = reminderDao.getById(id) ?: return@withTransaction RepositoryActionResult.NOT_FOUND
-        reconcileStored(reminder, now, zoneId)
+        reconcileStored(reminder, now, zoneId, masterEnabled)
         RepositoryActionResult.APPLIED
     }
 
@@ -184,11 +249,13 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): ReminderSchedulingSnapshot? = database.withTransaction {
+        val masterEnabled = ensureMasterEnabled()
         val reminder = reminderDao.getById(id) ?: return@withTransaction null
-        val state = reconcileStored(reminder, now, zoneId)
+        val state = reconcileStored(reminder, now, zoneId, masterEnabled)
         ReminderSchedulingSnapshot(
             definition = requireNotNull(reminderDao.getById(id)).toDefinition(),
             state = state,
+            masterEnabled = masterEnabled,
         )
     }
 
@@ -197,11 +264,13 @@ class ReminderRepository(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): List<ReminderSchedulingSnapshot> = database.withTransaction {
+        val masterEnabled = ensureMasterEnabled()
         reminderDao.getAll().map { reminder ->
-            val state = reconcileStored(reminder, now, zoneId)
+            val state = reconcileStored(reminder, now, zoneId, masterEnabled)
             ReminderSchedulingSnapshot(
                 definition = requireNotNull(reminderDao.getById(reminder.id)).toDefinition(),
                 state = state,
+                masterEnabled = masterEnabled,
             )
         }
     }
@@ -317,8 +386,9 @@ class ReminderRepository(
         now: Instant,
         zoneId: ZoneId,
     ): NormalizedReminder? {
+        val masterEnabled = ensureMasterEnabled()
         val reminder = reminderDao.getById(id) ?: return null
-        val state = reconcileStored(reminder, now, zoneId)
+        val state = reconcileStored(reminder, now, zoneId, masterEnabled)
         return NormalizedReminder(
             reminder = requireNotNull(reminderDao.getById(id)),
             definition = reminder.toDefinition(),
@@ -330,13 +400,15 @@ class ReminderRepository(
         reminder: ReminderEntity,
         now: Instant,
         zoneId: ZoneId,
+        masterEnabled: Boolean? = null,
     ): ReminderScheduleState {
         val current = loadState(reminder)
         val definition = reminder.toDefinition()
-        val state = if (reminder.enabled) {
+        val deliveryEnabled = (masterEnabled ?: ensureMasterEnabled()) && reminder.enabled
+        val state = if (deliveryEnabled) {
             ReminderStateMachine.reconcile(definition, current, now, zoneId)
         } else {
-            ReminderStateMachine.skipDisabledOccurrences(
+            ReminderStateMachine.skipInactiveOccurrences(
                 definition = definition,
                 current = current,
                 now = now,
@@ -345,6 +417,13 @@ class ReminderRepository(
         }
         persistSchedule(reminder, state, now, zoneId)
         return state
+    }
+
+    private suspend fun ensureMasterEnabled(): Boolean {
+        val current = appSettingsDao.get()
+        if (current != null) return current.masterEnabled
+        appSettingsDao.upsert(AppSettingsEntity())
+        return true
     }
 
     private suspend fun loadState(reminder: ReminderEntity): ReminderScheduleState {

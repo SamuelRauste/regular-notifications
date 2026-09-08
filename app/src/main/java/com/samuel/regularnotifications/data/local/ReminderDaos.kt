@@ -8,6 +8,18 @@ import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+interface AppSettingsDao {
+    @Query("SELECT * FROM app_settings WHERE id = ${AppSettingsEntity.SINGLETON_ID}")
+    suspend fun get(): AppSettingsEntity?
+
+    @Query("SELECT masterEnabled FROM app_settings WHERE id = ${AppSettingsEntity.SINGLETON_ID}")
+    fun observeMasterEnabled(): Flow<Boolean?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(settings: AppSettingsEntity)
+}
+
+@Dao
 interface ReminderDao {
     @Query("SELECT * FROM reminders ORDER BY enabled DESC, nextNormalOccurrenceEpochMillis ASC, id ASC")
     fun observeAll(): Flow<List<ReminderEntity>>

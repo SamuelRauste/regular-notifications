@@ -13,6 +13,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -225,6 +226,77 @@ class ReminderRepositoryTest {
         assertEquals(3L, afterTravel.nextNormalOccurrenceIndex)
         assertNull(database.outstandingDueDao().getByReminderId(reminderId))
         assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+    }
+
+    @Test
+    fun globalPausePersistsSkipsOutstandingWorkAndKeepsIndividualState() = runBlocking {
+        val reminderId = repository.createReminder(
+            input().copy(
+                firstOccurrence = LocalDateTime.of(2026, 1, 1, 9, 0),
+                intervalDays = 7,
+            ),
+            utc,
+            now,
+        )
+        val anchorBeforePause = database.reminderDao().getById(reminderId)!!
+
+        assertNotNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.setMasterEnabled(enabled = false, zoneId = utc, now = now),
+        )
+
+        val paused = database.reminderDao().getById(reminderId)!!
+        assertFalse(database.appSettingsDao().get()!!.masterEnabled)
+        assertTrue(paused.enabled)
+        assertEquals(0L, paused.lastResolvedNormalOccurrenceIndex)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertNull(database.tomorrowPreviewDao().getByReminderId(reminderId))
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+        assertEquals(anchorBeforePause.anchorLocalDate, paused.anchorLocalDate)
+        assertEquals(anchorBeforePause.anchorLocalTime, paused.anchorLocalTime)
+
+        val recreatedRepository = ReminderRepository(database, clock = { now })
+        assertFalse(recreatedRepository.getMasterEnabled())
+
+        val resumedAt = Instant.parse("2026-01-20T10:00:00Z")
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            recreatedRepository.setMasterEnabled(enabled = true, zoneId = utc, now = resumedAt),
+        )
+
+        val resumed = database.reminderDao().getById(reminderId)!!
+        assertTrue(database.appSettingsDao().get()!!.masterEnabled)
+        assertTrue(resumed.enabled)
+        assertEquals(2L, resumed.lastResolvedNormalOccurrenceIndex)
+        assertEquals(3L, resumed.nextNormalOccurrenceIndex)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+    }
+
+    @Test
+    fun globalResumeDoesNotEnableAnIndividuallyDisabledReminder() = runBlocking {
+        val reminderId = repository.createReminder(
+            input().copy(
+                enabled = false,
+                firstOccurrence = LocalDateTime.of(2026, 1, 1, 9, 0),
+                intervalDays = 7,
+            ),
+            utc,
+            now,
+        )
+
+        repository.setMasterEnabled(enabled = false, zoneId = utc, now = now)
+        repository.setMasterEnabled(
+            enabled = true,
+            zoneId = utc,
+            now = Instant.parse("2026-01-20T10:00:00Z"),
+        )
+
+        val stored = database.reminderDao().getById(reminderId)!!
+        assertFalse(stored.enabled)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertNull(database.tomorrowPreviewDao().getByReminderId(reminderId))
     }
 
     @Test

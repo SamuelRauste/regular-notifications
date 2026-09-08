@@ -76,4 +76,43 @@ class ReminderListScreenTest {
         composeRule.onNodeWithContentDescription("Delete Take out trash").assertHasClickAction()
         composeRule.onNodeWithContentDescription("Enable Take out trash").assertHasClickAction()
     }
+
+    @Test
+    fun globalPauseIsVisibleWithoutChangingTheReminderSpecificSwitch() {
+        var resumed = false
+
+        composeRule.setContent {
+            MaterialTheme {
+                ReminderListScreen(
+                    uiState = ReminderListUiState(
+                        isLoading = false,
+                        masterEnabled = false,
+                        reminders = listOf(
+                            ReminderListItem(
+                                id = 7,
+                                title = "Take out trash",
+                                description = null,
+                                enabled = true,
+                                intervalDays = 7,
+                                nextOccurrence = "Tue 10 Sep, 09:00",
+                                masterEnabled = false,
+                            ),
+                        ),
+                    ),
+                    onAddReminder = {},
+                    onEditReminder = {},
+                    onSetEnabled = { _, _ -> },
+                    onSetMasterEnabled = { resumed = it },
+                    onDeleteReminder = {},
+                    onRetry = {},
+                    onDismissError = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Every 7 days - Globally paused").assertIsDisplayed()
+        composeRule.onNodeWithText("Enabled").assertIsDisplayed()
+        composeRule.onNodeWithContentDescription("Resume all reminders").performClick()
+        composeRule.runOnIdle { assertTrue(resumed) }
+    }
 }

@@ -48,6 +48,7 @@ fun ReminderListScreen(
     onAddReminder: () -> Unit,
     onEditReminder: (Long) -> Unit,
     onSetEnabled: (Long, Boolean) -> Unit,
+    onSetMasterEnabled: (Boolean) -> Unit = {},
     onDeleteReminder: (Long) -> Unit,
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
@@ -84,6 +85,12 @@ fun ReminderListScreen(
                     onAction = onNotificationPermissionAction,
                 )
             }
+            MasterReminderControl(
+                enabled = uiState.masterEnabled,
+                isUpdating = uiState.isMasterUpdating,
+                onSetEnabled = onSetMasterEnabled,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -147,6 +154,50 @@ fun ReminderListScreen(
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun MasterReminderControl(
+    enabled: Boolean,
+    isUpdating: Boolean,
+    onSetEnabled: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 64.dp)
+                .toggleable(
+                    value = enabled,
+                    enabled = !isUpdating,
+                    role = Role.Switch,
+                    onValueChange = onSetEnabled,
+                )
+                .semantics(mergeDescendants = true) {
+                    contentDescription = if (enabled) {
+                        "Pause all reminders"
+                    } else {
+                        "Resume all reminders"
+                    }
+                }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("All reminders", fontWeight = FontWeight.SemiBold)
+                Text(
+                    text = if (enabled) "Reminder delivery is on" else "Reminder delivery is paused",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Switch(
+                checked = enabled,
+                enabled = !isUpdating,
+                onCheckedChange = null,
+            )
+        }
     }
 }
 

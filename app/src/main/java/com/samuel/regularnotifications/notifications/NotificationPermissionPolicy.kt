@@ -8,6 +8,11 @@ enum class NotificationPermissionAction {
 
 fun notificationPermissionRequired(sdkInt: Int): Boolean = sdkInt >= 33
 
+fun notificationPermissionBecameGranted(
+    wasGranted: Boolean,
+    isGranted: Boolean,
+): Boolean = !wasGranted && isGranted
+
 fun notificationPermissionAction(
     required: Boolean,
     granted: Boolean,

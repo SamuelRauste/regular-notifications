@@ -15,7 +15,21 @@ class ReminderService(
 ) {
     fun observeReminders(): Flow<List<ReminderEntity>> = repository.observeReminders()
 
+    fun observeMasterEnabled(): Flow<Boolean> = repository.observeMasterEnabled()
+
     fun observeReminder(id: Long): Flow<ReminderEntity?> = repository.observeReminder(id)
+
+    suspend fun setMasterEnabled(
+        enabled: Boolean,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        now: Instant = Instant.now(),
+    ): RepositoryActionResult {
+        val result = repository.setMasterEnabled(enabled, zoneId, now)
+        if (result == RepositoryActionResult.APPLIED) {
+            scheduler.reconcileAll(now, zoneId)
+        }
+        return result
+    }
 
     suspend fun createReminder(
         input: ReminderInput,

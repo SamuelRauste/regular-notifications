@@ -25,6 +25,8 @@ Room database       ReminderScheduler
 
 Room remains the source of truth. Android alarms and visible notifications are
 derived state and must be safe to cancel and recreate from stored reminders.
+The same database also contains one application-settings row for the persisted
+global reminder-delivery switch.
 
 Phase 2 adds the Compose reminder-management UI on top of the persisted,
 pure-Kotlin recurrence/state model. Phase 3 adds notification presentation,
@@ -92,10 +94,12 @@ occurrences for a reminder into one outstanding due state.
 ## Phase 1 persisted state model
 
 Room is the source of truth for both schedule state and deduplication state.
-The schema is deliberately limited to four conceptual tables:
+The schema is deliberately limited to one settings table and four schedule/
+history tables:
 
 | Concept | Persisted representation | Invariant |
 | --- | --- | --- |
+| Global delivery switch | `app_settings` singleton row with `masterEnabled` | The switch is durable and independent from every reminder's `enabled` flag. |
 | Reminder definition / recurrence anchor | `reminders` row with stable ID, title, description, enabled flag, local anchor date/time, `intervalDays`, and timestamps | The anchor and interval are never changed by notification actions. |
 | Current calculated next normal recurrence | Cached normal occurrence index, epoch instant, and last calculation zone on the reminder row | It is derived from the definition and recalculated after recovery/time-zone changes. |
 | Resolved/skipped normal-occurrence cursor | Highest normal occurrence index resolved by Done/Dismiss or skipped while disabled on the reminder row | It prevents resolved or intentionally skipped occurrences from being recreated without changing the recurrence anchor or normal schedule. |
@@ -104,8 +108,13 @@ The schema is deliberately limited to four conceptual tables:
 | Reminder event/history | Append-only `reminder_events` rows with reminder ID, logical occurrence index, action, times, and optional postponement time | Done, Dismiss, +1 day, and Seen are auditable without changing the recurrence definition. |
 
 The existing `lastResolvedNormalOccurrenceIndex` column is intentionally reused
-as this resolved/skipped cursor. No new Room field or schema version is needed;
-the name remains for compatibility with the Phase 1 schema.
+as this resolved/skipped cursor. No additional cursor column is needed; the
+name remains for compatibility with the Phase 1 schema.
+
+The Room schema version is now 3. It adds one `app_settings` singleton row with
+`masterEnabled`. The row is initialized to true when the repository first
+opens/reconciles the database. Development databases still use the existing
+destructive fallback for unsupported older schemas.
 
 The normal occurrence index is a stable zero-based logical instance derived
 from the original anchor. It is used to distinguish an occurrence in history
@@ -133,10 +142,11 @@ work can reject stale actions. The database primary keys, transaction
 boundaries, and revision checks prevent duplicate delivery rather than relying
 on cleanup after several notifications have already been posted.
 
-The current Room schema is version 2. It removes the old duration anchor and
-interval-unit fields in favor of `intervalDays`. This is a pre-release app, so
-the app deliberately destructively recreates an old local development database
-rather than carrying a migration for unsupported recurrence types.
+Room schema version 2 removed the old duration anchor and interval-unit fields
+in favor of `intervalDays`; version 3 adds the settings row. This is a
+pre-release app, so the app deliberately destructively recreates an old local
+development database rather than carrying migrations for unsupported
+recurrence types.
 
 Tomorrow previews target only the next normal future occurrence, except that an
 every-1-day reminder never has one. Eligible previews are scheduled one local
@@ -177,6 +187,14 @@ making the repository Android-aware. The application container owns one
 `AlarmManagerReminderScheduler` and one repository; receivers reuse that same
 container.
 
+Editing through the existing editor can correct a title/description typo or
+change the schedule; the updated definition is the source for subsequent
+notifications and obsolete derived schedule rows are rebuilt. Delete remains
+permanent. The service cancels both alarm identities and both visible
+notification identities before the Room row is removed; Room foreign keys then
+cascade its outstanding state and history. A stale delivery after deletion
+reloads Room, finds no reminder, and safely cancels without posting.
+
 `AlarmManagerReminderScheduler` calls
 `AlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis,
 pendingIntent)` for individually scheduled, one-shot inexact alarms. This API
@@ -184,12 +202,14 @@ can run during Doze but remains subject to Android batching and delay. The app
 does not declare or request `SCHEDULE_EXACT_ALARM` or `USE_EXACT_ALARM`, and it
 does not use WorkManager as the reminder timer.
 
-`AlarmSchedulePlanner` is pure Kotlin. For an enabled reminder it schedules a
+`AlarmSchedulePlanner` is pure Kotlin. For a reminder whose effective enabled
+state is `masterEnabled && reminder.enabled`, it schedules a
 DUE alarm at the outstanding due time, or at the next normal occurrence when
 there is no outstanding due state. It schedules TOMORROW only when the
 persisted preview is unacknowledged, still targets a future occurrence, and the
 shared `supportsTomorrow(intervalDays)` rule allows it. An outstanding DUE
-state suppresses TOMORROW. Disabled reminders produce no alarms.
+state suppresses TOMORROW. Globally paused and individually disabled reminders
+produce no alarms or visible reminder notifications.
 
 The scheduler first calls Room reconciliation and only then derives alarms from
 the returned snapshot. Repeated reconciliation replaces the same PendingIntent
@@ -214,6 +234,42 @@ performs a full reconciliation. Reconciliation recalculates local-wall-clock
 occurrences in the current zone, so a 09:00 reminder remains 09:00 after travel
 and old alarm trigger times are replaced. Deleted or disabled reminders are
 safe when a previously delivered alarm races with the database change.
+
+## Global delivery switch and permission recovery
+
+The main list exposes a plain-language `All reminders` switch backed by the
+`app_settings` Room row. It is not implemented as transient Compose state and
+does not rewrite any reminder's individual `enabled` value. The effective
+delivery state is:
+
+```text
+masterEnabled && reminder.enabled
+```
+
+When the master switch changes from on to off, the repository transaction
+advances every reminder through `ReminderStateMachine.skipInactiveOccurrences`,
+clears outstanding DUE and TOMORROW state, and preserves the original anchor,
+individual enabled flag, and history. The scheduler then cancels both alarm
+kinds and both visible notification kinds. No Done, Dismiss, or other fake
+history event is recorded. A stale alarm rechecks the persisted master state
+before it can post anything.
+
+If the app process is dead while the master switch is off, turning it back on
+first applies the same inactive skip operation at the current time, then
+reconciles only each reminder's next future anchored occurrence. This is why a
+global pause does not create an overdue backlog or reset recurrence anchors.
+An individually disabled reminder remains disabled after global resume and
+continues to use the same inactive cursor rules. A future TOMORROW preview may
+be recomputed for a still-future target after resume; an expired preview is not
+replayed.
+
+Android notification permission is a separate control. With permission denied,
+reminders remain configured and their outstanding Room state is retained. If a
+DUE or TOMORROW alarm fires while permission is unavailable, the scheduler
+does not spin on immediate retries. When the UI observes a denied-to-granted
+permission transition, it requests one scheduling reconciliation. Startup also
+reconciles, so opening the app after granting permission is sufficient even if
+the app was not running while the setting changed.
 
 ## Notifications and permissions
 
@@ -255,12 +311,16 @@ implement the action behavior; the production action receiver remains inert.
 
 Receivers do short database/scheduling work using `goAsync()` and the
 application scope. The receiver never trusts alarm extras without reloading
-Room state and checking the current revision. No network permission, accounts,
+Room state and checking the current revision. The app does not need to remain
+open, stay in Recents, run a foreground service, or show a persistent process
+notification: Android may terminate the process and later start the explicit
+alarm receiver. No network permission, accounts,
 analytics, advertisements, or cloud sync are planned. Diagnostic logs may
 include IDs and operation outcomes, but not title
 or description text. Android can delay inexact alarms and can suppress alarms
-after an explicit force-stop until the app is opened again; both limitations
-will be documented and manually tested.
+and receivers after an explicit Force Stop until the app is opened again. The
+app does not attempt to bypass that platform behavior; it is documented and
+manually tested.
 
 The primary user experience is intentionally low-friction: one main reminder
 list, a prominent add action, direct enable/edit/delete controls, sensible
@@ -272,12 +332,14 @@ recurrence instances, revisions, or time zones.
 ## Testing strategy
 
 Pure recurrence, validation, presentation, notification eligibility, identity,
-and permission-policy tests are ordinary JUnit tests. AndroidX tests cover
+permission-transition policy, and global alarm-planning tests are ordinary
+JUnit tests. AndroidX tests cover
 NotificationCompat action sets, channel idempotency, content/action PendingIntent
 identity, and alarm PendingIntent identity. Pure alarm planner/delivery tests
 cover enabled/disabled schedules, daily eligibility, acknowledgement, due
 precedence, stale revisions, and early delivery.
-Room DAO tests cover persistence and event history. AndroidX tests cover
+Room DAO tests cover persistence, event history, and master-switch skip/resume
+semantics. AndroidX tests cover
 repository-backed list/editor ViewModels and the high-value empty-state Compose
 path. Scheduling tests will verify stable identifiers, cancellation/reschedule
 behavior, editing, deletion, and missed-occurrence handling. Action tests will

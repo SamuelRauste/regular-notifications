@@ -20,7 +20,6 @@ fun RegularNotificationsApp(
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
-    val notificationPermission = rememberNotificationPermissionController()
 
     NavHost(
         navController = navController,
@@ -30,6 +29,9 @@ fun RegularNotificationsApp(
         composable(ReminderListRoute) {
             val viewModel: ReminderListViewModel = viewModel(
                 factory = ReminderListViewModel.factory(appContainer.reminderService),
+            )
+            val notificationPermission = rememberNotificationPermissionController(
+                onPermissionGranted = viewModel::onNotificationPermissionGranted,
             )
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -42,6 +44,7 @@ fun RegularNotificationsApp(
                     navController.navigate(editorRoute(reminderId))
                 },
                 onSetEnabled = viewModel::setEnabled,
+                onSetMasterEnabled = viewModel::setMasterEnabled,
                 onDeleteReminder = viewModel::delete,
                 onRetry = viewModel::retry,
                 onDismissError = viewModel::clearError,

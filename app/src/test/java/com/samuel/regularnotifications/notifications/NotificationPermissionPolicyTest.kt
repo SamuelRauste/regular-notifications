@@ -11,6 +11,13 @@ class NotificationPermissionPolicyTest {
     }
 
     @Test
+    fun reconciliationIsRequestedOnlyOnDeniedToGrantedTransition() {
+        assertEquals(true, notificationPermissionBecameGranted(wasGranted = false, isGranted = true))
+        assertEquals(false, notificationPermissionBecameGranted(wasGranted = true, isGranted = true))
+        assertEquals(false, notificationPermissionBecameGranted(wasGranted = false, isGranted = false))
+    }
+
+    @Test
     fun initialAndroid13StateOffersAUserInitiatedRequest() {
         assertEquals(
             NotificationPermissionAction.REQUEST,

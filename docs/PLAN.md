@@ -63,6 +63,29 @@ are marked complete only after the relevant checks have been run.
 - [ ] Implement notification swipe dismissal where Android reliably exposes it.
 - [ ] Add action-processing tests.
 
+## Corrective/product pass between Phase 4 and Phase 5
+
+- [x] Persist one global `masterEnabled` reminder-delivery setting in Room
+  without changing individual reminder `enabled` values.
+- [x] Make global pause and individual disable share the inactive-occurrence
+  cursor operation: clear derived DUE/TOMORROW state, skip passed occurrences,
+  preserve anchors, and record no fake history.
+- [x] Reconcile globally paused reminders before resume so a process restart or
+  long pause cannot create an overdue backlog.
+- [x] Enforce `masterEnabled && reminder.enabled` in planning, alarm delivery,
+  startup, boot/time/time-zone recovery, create/edit, and enable/disable paths.
+- [x] Remove visible reminder notifications when global or individual delivery
+  becomes inactive, while keeping stale alarm delivery safe.
+- [x] Reconcile Room-derived outstanding work after notification permission
+  changes from denied/unavailable to granted, without immediate retry loops.
+- [x] Add the master switch UI, clear paused presentation, and accessibility
+  semantics while preserving individual edit/enable/delete controls.
+- [x] Document calendar-like background operation, Force Stop limitations,
+  permission separation, global pause semantics, edit behavior, and permanent
+  deletion cleanup.
+- [x] Add JVM and AndroidX coverage for master persistence, four effective-state
+  combinations, global pause/resume, permission transitions, and UI semantics.
+
 ## Phase 6 — Recovery and history
 
 - [ ] Extend the Phase 4 lightweight boot/time/time-zone recovery with the remaining recovery/history behavior and physical-device validation.
@@ -97,7 +120,7 @@ are marked complete only after the relevant checks have been run.
 - There is one persisted outstanding due state and one persisted Tomorrow preview state per reminder. Normal recurrence remains canonical; postponed state is auxiliary and can be collapsed when a newer normal occurrence becomes due.
 - The reminder stores one resolved/skipped normal-occurrence cursor so Done/Dismiss cannot recreate resolved occurrences and disabled-period occurrences cannot reappear after recovery or a time-zone change; this cursor does not alter the recurrence anchor and does not create history for skipped occurrences.
 - Disabled reminders do not accumulate missed occurrences. Re-enabling resumes at the first future occurrence on the original Every-X-days schedule; it does not restart the schedule from the re-enable date.
-- The existing `lastResolvedNormalOccurrenceIndex` column is reused as the resolved/skipped cursor; no new Room field or schema version is required.
+- The existing `lastResolvedNormalOccurrenceIndex` column is reused as the resolved/skipped cursor; no additional cursor field is required. The separate `app_settings` row is Room schema version 3.
 - Disabled reminder cards show `Every X days · Paused` instead of a cached `Next:` date. Edit, delete, and enable/disable controls include the reminder title in their accessibility semantics while keeping the visible labels short.
 - Phase 3 uses one `Reminders` notification channel. DUE has `Done`, `Dismiss`, and `+1 day`; TOMORROW has only `Seen`; Every 1 day never builds TOMORROW.
 - NotificationManager identity is `(tag containing full reminder ID and kind, stable small kind ID)`, so notification tags prevent 64-bit-to-32-bit ID collisions. Action PendingIntents carry reminder ID, kind, action, and expected revision, use stable data/request identity, and are immutable.
@@ -119,6 +142,25 @@ are marked complete only after the relevant checks have been run.
 - Any asynchronous receiver work must use a receiver lifecycle mechanism such as `goAsync()`/`PendingResult.finish()`; unmanaged `onReceive()` coroutines are prohibited.
 - The main UI must be understandable in under one minute: direct controls, obvious labels, sensible defaults, few screens, and no unnecessary onboarding or advanced settings.
 
+## Corrective/product decisions
+
+- The persisted `app_settings.masterEnabled` singleton is the only global
+  reminder-delivery setting. It defaults to true and is read by Room-backed
+  reconciliation; Compose state is only a presentation of it.
+- Effective delivery is `masterEnabled && reminder.enabled`. Turning the master
+  switch off clears DUE/TOMORROW derived state and visible notifications and
+  skips occurrences without fake history. Turning it on first skips all time
+  elapsed while globally paused, then rebuilds only future anchored work.
+- Global pause does not alter reminder definitions, recurrence anchors, or
+  individual enabled switches. A reminder whose own switch is off remains off
+  after global resume.
+- AlarmManager and explicit receivers provide background behavior without a
+  foreground service or polling. Android Force Stop may still suppress alarms
+  and receivers until the app is opened again.
+- Denied notification permission retains Room outstanding state. A denied to
+  granted transition triggers one reconciliation; permission and the master
+  switch never silently change one another.
+
 ## Phase 1, Phase 2, Phase 3, and Phase 4 verification note
 
 The simplified Every-X-days Phase 1 checkpoint passed the JVM suite, lint,
@@ -137,3 +179,10 @@ device or emulator is available. Physical testing is still required for actual
 AlarmManager timing, lock-screen delivery, battery saver/Doze behavior, reboot,
 time-zone changes, notification body taps, and vendor-specific background
 policies.
+
+The corrective/product pass also passed `test`, `lint`, `assembleDebug`, and
+`assembleAndroidTest`. Connected instrumentation was not run because no usable
+device or emulator is available. Physical testing remains required for
+permission-granted recovery, global pause/resume across process death and
+reboot, visible notification cancellation, lock-screen delivery, battery
+saver/Doze behavior, and vendor-specific background policies.

@@ -5,15 +5,18 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [
+        AppSettingsEntity::class,
         ReminderEntity::class,
         OutstandingDueEntity::class,
         TomorrowPreviewEntity::class,
         ReminderEventEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class ReminderDatabase : RoomDatabase() {
+    abstract fun appSettingsDao(): AppSettingsDao
+
     abstract fun reminderDao(): ReminderDao
 
     abstract fun outstandingDueDao(): OutstandingDueDao

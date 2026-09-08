@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.samuel.regularnotifications.AppContainer
+import com.samuel.regularnotifications.notifications.rememberNotificationPermissionController
 
 private const val ReminderListRoute = "reminders"
 private const val ReminderEditorRoute = "editor/{reminderId}"
@@ -19,6 +20,7 @@ fun RegularNotificationsApp(
     modifier: Modifier = Modifier,
 ) {
     val navController = rememberNavController()
+    val notificationPermission = rememberNotificationPermissionController()
 
     NavHost(
         navController = navController,
@@ -43,6 +45,8 @@ fun RegularNotificationsApp(
                 onDeleteReminder = viewModel::delete,
                 onRetry = viewModel::retry,
                 onDismissError = viewModel::clearError,
+                notificationPermission = notificationPermission.presentation,
+                onNotificationPermissionAction = notificationPermission.onAction,
             )
         }
         composable(ReminderEditorRoute) { backStackEntry ->

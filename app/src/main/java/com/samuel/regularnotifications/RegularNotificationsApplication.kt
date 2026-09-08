@@ -5,6 +5,7 @@ import android.content.Context
 import com.samuel.regularnotifications.data.ReminderRepository
 import com.samuel.regularnotifications.data.local.ReminderDatabase
 import com.samuel.regularnotifications.data.local.ReminderDatabaseProvider
+import com.samuel.regularnotifications.notifications.ReminderNotificationChannels
 
 /**
  * Owns the process-wide persistence graph. Future screens and receivers obtain
@@ -13,6 +14,11 @@ import com.samuel.regularnotifications.data.local.ReminderDatabaseProvider
 class RegularNotificationsApplication : Application() {
     val appContainer: AppContainer by lazy {
         AppContainer(applicationContext)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        ReminderNotificationChannels.ensureCreated(this)
     }
 }
 

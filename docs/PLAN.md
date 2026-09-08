@@ -37,12 +37,12 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 3 — Notification foundation
 
-- [ ] Create a notification channel and factory for both normal due notifications and eligible `Tomorrow: [reminder title]` previews.
-- [ ] Give a normal due notification Done, Dismiss, and +1 day actions; give a Tomorrow notification only a Seen action.
-- [ ] Ensure every-1-day reminders never create a Tomorrow notification.
-- [ ] Request `POST_NOTIFICATIONS` on supported Android versions.
-- [ ] Handle denied permission without breaking reminder management.
-- [ ] Add a temporary/test notification path, then cover it with tests and documentation.
+- [x] Create an idempotent notification channel and factory for both normal due notifications and eligible `Tomorrow: [reminder title]` previews.
+- [x] Give a normal due notification Done, Dismiss, and +1 day action contracts; give a Tomorrow notification only a Seen action.
+- [x] Ensure every-1-day reminders never create a Tomorrow notification.
+- [x] Request `POST_NOTIFICATIONS` on supported Android versions through a user-initiated, non-blocking UI action.
+- [x] Handle denied permission without breaking reminder management.
+- [x] Add a debug-only adb notification path, then cover notification presentation, identity, permission policy, and PendingIntent contracts with tests and documentation.
 
 ## Phase 4 — Alarm scheduling and delivery
 
@@ -99,6 +99,10 @@ are marked complete only after the relevant checks have been run.
 - Disabled reminders do not accumulate missed occurrences. Re-enabling resumes at the first future occurrence on the original Every-X-days schedule; it does not restart the schedule from the re-enable date.
 - The existing `lastResolvedNormalOccurrenceIndex` column is reused as the resolved/skipped cursor; no new Room field or schema version is required.
 - Disabled reminder cards show `Every X days · Paused` instead of a cached `Next:` date. Edit, delete, and enable/disable controls include the reminder title in their accessibility semantics while keeping the visible labels short.
+- Phase 3 uses one `Reminders` notification channel. DUE has `Done`, `Dismiss`, and `+1 day`; TOMORROW has only `Seen`; Every 1 day never builds TOMORROW.
+- NotificationManager identity is `(tag containing full reminder ID and kind, stable small kind ID)`, so notification tags prevent 64-bit-to-32-bit ID collisions. Action PendingIntents carry reminder ID, kind, action, and expected revision, use stable data/request identity, and are immutable.
+- `POST_NOTIFICATIONS` is requested only after the user taps the permission banner on Android 13+; denied permission leaves CRUD usable and can link to app notification settings. The debug-only adb receiver exercises notifications before Phase 4.
+- Phase 3 does not schedule alarms or mutate Room from notification actions. AlarmManager delivery is Phase 4; Done, Dismiss, +1 day, Seen, and swipe-action processing are Phase 5.
 - Tomorrow previews are acknowledged per logical normal occurrence and use one `Seen` action. They are suppressed when the reminder is already due and are not replayed when obsolete after recovery.
 - Every-1-day reminders never create Tomorrow preview state or Tomorrow notifications. For eligible schedules, an existing preview remains current after `previewAt` until Seen, supersession, or the actual occurrence becoming due; a missing past preview is not replayed during recovery.
 - A Tomorrow revision changes whenever its occurrence instant, preview instant, or time zone changes, and stays stable for an unchanged reconciliation.
@@ -109,10 +113,14 @@ are marked complete only after the relevant checks have been run.
 - Any asynchronous receiver work must use a receiver lifecycle mechanism such as `goAsync()`/`PendingResult.finish()`; unmanaged `onReceive()` coroutines are prohibited.
 - The main UI must be understandable in under one minute: direct controls, obvious labels, sensible defaults, few screens, and no unnecessary onboarding or advanced settings.
 
-## Phase 1 and Phase 2 verification note
+## Phase 1, Phase 2, and Phase 3 verification note
 
 The simplified Every-X-days Phase 1 checkpoint passed the JVM suite, lint,
 debug APK, and Android-test APK compilation before Phase 2 began. The final
 Phase 2 verification passed the same checks. Instrumentation execution remains
 pending a usable physical device or emulator; the available adb process is not
 currently usable in this environment.
+
+Phase 3 verification passed the JVM suite, lint, debug APK, and Android-test APK
+compilation. Connected instrumentation remains pending a usable phone or
+emulator; the current adb process cannot create its Android user directory.

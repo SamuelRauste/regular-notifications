@@ -7,7 +7,20 @@ a real notification or reboot should be run on a physical Android phone.
 
 - [ ] Install the debug APK with `adb install -r`.
 - [ ] Confirm the app has no network permission and the notification channel exists.
-- [ ] Grant notification permission when prompted; repeat the suite once with it denied.
+- [ ] On Android 13+, verify the app shows a non-blocking notification-permission banner and only opens the permission dialog after its action is tapped.
+- [ ] Grant notification permission; repeat the suite with it denied and verify reminder CRUD still works.
+
+## Phase 3 notification foundation
+
+- [ ] With the debug APK installed, show a DUE notification:
+  `adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_DUE --el reminderId 42 --es title "Take out trash" --es description "Bins by the door"`.
+- [ ] Verify the DUE notification title, description, and exactly `Done`, `Dismiss`, and `+1 day` actions.
+- [ ] Repeat the same SHOW_DUE command and verify it replaces the existing notification instead of adding a duplicate.
+- [ ] Show a TOMORROW notification with `--ei intervalDays 7` and verify its title starts `Tomorrow:`, with only the `Seen` action.
+- [ ] Run the TOMORROW command with `--ei intervalDays 1` and verify no Tomorrow notification is posted.
+- [ ] Verify DUE and TOMORROW notifications for reminder ID 42 can coexist and can be cancelled independently with the documented CANCEL commands.
+- [ ] Tap a Phase 3 action and verify it is intentionally inert; final Done, Dismiss, +1 day, and Seen behavior is deferred to Phase 5.
+- [ ] Remember that these commands inspect presentation only; recurring AlarmManager delivery is deferred to Phase 4.
 
 ## Reminder lifecycle
 

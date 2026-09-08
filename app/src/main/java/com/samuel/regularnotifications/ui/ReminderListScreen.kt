@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.samuel.regularnotifications.notifications.NotificationPermissionPresentation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +52,8 @@ fun ReminderListScreen(
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
     modifier: Modifier = Modifier,
+    notificationPermission: NotificationPermissionPresentation = NotificationPermissionPresentation(),
+    onNotificationPermissionAction: () -> Unit = {},
 ) {
     var pendingDeletion by remember { mutableStateOf<ReminderListItem?>(null) }
 
@@ -70,38 +73,52 @@ fun ReminderListScreen(
             ) { Text("+ Add") }
         },
     ) { innerPadding ->
-        when {
-            uiState.isLoading -> LoadingReminders(Modifier.padding(innerPadding))
-            uiState.reminders.isEmpty() && uiState.errorMessage != null -> ErrorReminders(
-                message = uiState.errorMessage,
-                onRetry = onRetry,
-                modifier = Modifier.padding(innerPadding),
-            )
-
-            uiState.reminders.isEmpty() -> EmptyReminders(
-                onAddReminder = onAddReminder,
-                modifier = Modifier.padding(innerPadding),
-            )
-
-            else -> LazyColumn(
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+        ) {
+            if (notificationPermission.isVisible) {
+                NotificationPermissionBanner(
+                    presentation = notificationPermission,
+                    onAction = onNotificationPermissionAction,
+                )
+            }
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .fillMaxWidth()
+                    .weight(1f),
             ) {
-                uiState.errorMessage?.let { message ->
-                    item {
-                        ErrorBanner(message = message, onDismiss = onDismissError)
-                    }
-                }
-                items(uiState.reminders, key = { it.id }) { reminder ->
-                    ReminderCard(
-                        reminder = reminder,
-                        onEdit = { onEditReminder(reminder.id) },
-                        onSetEnabled = { onSetEnabled(reminder.id, it) },
-                        onDelete = { pendingDeletion = reminder },
+                when {
+                    uiState.isLoading -> LoadingReminders()
+                    uiState.reminders.isEmpty() && uiState.errorMessage != null -> ErrorReminders(
+                        message = uiState.errorMessage,
+                        onRetry = onRetry,
                     )
+
+                    uiState.reminders.isEmpty() -> EmptyReminders(
+                        onAddReminder = onAddReminder,
+                    )
+
+                    else -> LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        uiState.errorMessage?.let { message ->
+                            item {
+                                ErrorBanner(message = message, onDismiss = onDismissError)
+                            }
+                        }
+                        items(uiState.reminders, key = { it.id }) { reminder ->
+                            ReminderCard(
+                                reminder = reminder,
+                                onEdit = { onEditReminder(reminder.id) },
+                                onSetEnabled = { onSetEnabled(reminder.id, it) },
+                                onDelete = { pendingDeletion = reminder },
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -219,6 +236,35 @@ private fun ErrorBanner(
             Text(message, modifier = Modifier.weight(1f))
             TextButton(onClick = onDismiss) {
                 Text("Dismiss")
+            }
+        }
+    }
+}
+
+@Composable
+private fun NotificationPermissionBanner(
+    presentation: NotificationPermissionPresentation,
+    onAction: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(presentation.message, style = MaterialTheme.typography.bodyMedium)
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(presentation.actionLabel)
             }
         }
     }

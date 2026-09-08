@@ -9,11 +9,13 @@ advertisements, or network access.
 
 ## Status
 
-Phase 2 is complete: the app can create, view, edit, enable, disable, and
-delete local reminders through a short Compose/Material 3 interface. Every
-reminder uses **Every X days**. AlarmManager scheduling, notification delivery,
-and action receivers are intentionally not implemented yet. Android
-instrumentation tests compile but still need a usable phone or emulator to run.
+Phase 3 is complete: the app has its notification channel, DUE and TOMORROW
+notification factory, action PendingIntent contract, and Android 13+
+notification-permission UX. The app can create, view, edit, enable, disable,
+and delete local reminders through a short Compose/Material 3 interface.
+AlarmManager scheduling and recurring delivery are Phase 4; action processing
+is Phase 5. Android instrumentation tests compile but still need a usable
+phone or emulator to run.
 
 ## Prerequisites
 
@@ -68,6 +70,23 @@ Every 1 day. When notification delivery is added, Tomorrow previews will be
 automatic for intervals of 2 or more days; there is no preview setting in the
 form.
 
+## Inspect Phase 3 notifications
+
+The debug APK contains a temporary, non-production `adb` broadcast receiver.
+It exercises the factory without AlarmManager scheduling:
+
+```powershell
+adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_DUE --el reminderId 42 --es title "Take out trash" --es description "Bins by the door"
+adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_TOMORROW --el reminderId 42 --ei intervalDays 7 --es title "Take out trash"
+adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.CANCEL_DUE --el reminderId 42
+adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.CANCEL_TOMORROW --el reminderId 42
+```
+
+Repeating a SHOW command with the same reminder ID replaces the same logical
+notification. The debug receiver is excluded from release builds. Its action
+buttons are contract stubs until Phase 5, and the commands do not schedule
+future reminders.
+
 ## Run on a physical phone
 
 With USB debugging enabled and the phone connected:
@@ -77,11 +96,13 @@ adb devices
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Later notification work will request `POST_NOTIFICATIONS` at runtime on Android
-13 and newer. Notification delivery will also depend on Android's alarm and
-battery-management policies. The planned scheduler uses reasonably punctual
-inexact one-shot `AlarmManager` alarms and does not request exact-alarm special
-access.
+On Android 13 and newer, the app asks for `POST_NOTIFICATIONS` only after the
+user taps the non-blocking permission banner. Denial does not prevent reminder
+management; the banner offers Android notification settings when another
+permission prompt is no longer appropriate. Notification delivery will also
+depend on Android's alarm and battery-management policies once Phase 4 exists.
+The planned scheduler uses reasonably punctual inexact one-shot `AlarmManager`
+alarms and does not request exact-alarm special access.
 
 Every-X-days recurrences preserve local wall-clock time across daylight-saving
 and time-zone changes. Android may delay alarms, especially in battery saver or

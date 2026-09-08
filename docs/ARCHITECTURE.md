@@ -27,8 +27,9 @@ Room remains the source of truth. Android alarms and visible notifications are
 derived state and must be safe to cancel and recreate from stored reminders.
 
 Phase 2 adds the Compose reminder-management UI on top of the persisted,
-pure-Kotlin recurrence/state model. AlarmManager scheduling, notification
-delivery, and BroadcastReceiver implementation remain later phases.
+pure-Kotlin recurrence/state model. Phase 3 adds notification presentation,
+permission UX, and action contracts. AlarmManager scheduling and action
+business logic remain later phases.
 
 ## Planned packages
 
@@ -186,14 +187,38 @@ directly from `onReceive()` are not acceptable.
 
 ## Notifications and permissions
 
-Notifications use `NotificationCompat` with a dedicated channel. A normal due
-notification has Done, Dismiss, and +1 day actions. An eligible Tomorrow
-notification uses the `Tomorrow: [title]` format and has only the Seen action;
-every-1-day reminders never receive this notification. Android 13+ notification
-permission is requested at runtime; a denial is shown as a useful UI state
-while reminders remain editable. Action receivers update Room and
-cancel/update notification state without depending on the app process remaining
-alive.
+Phase 3 creates one idempotent `Reminders` notification channel with ordinary
+default importance. `ReminderNotificationFactory` builds the two notification
+shapes without reading Room or changing repository state. A DUE notification
+shows the reminder title and optional description, with exactly `Done`,
+`Dismiss`, and `+1 day`. A TOMORROW notification is titled
+`Tomorrow: [title]` and has only `Seen`; the factory returns no notification for
+an Every-1-day input, so this rule is not UI-only.
+
+`ReminderNotificationManager` is the only posting/cancellation boundary. Its
+target uses `NotificationManagerCompat.notify(tag, id, notification)`. The tag
+contains the full reminder ID and notification kind, while the small integer ID
+is stable per kind. This makes DUE and TOMORROW distinct and avoids reducing a
+64-bit reminder ID to the only identity component. Reposting the same pair
+replaces it; cancellation uses the same deterministic pair.
+
+Action `PendingIntent`s target the explicit `NotificationActionReceiver` and
+carry the reminder ID, notification kind, action, and expected revision. Their
+data URI contains the full reminder/kind/action identity, their request code is
+stable, and they use `FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE`. The receiver is an
+inert Phase 3 stub that only logs the action name; Phase 5 will add repository
+mutations and notification cancellation.
+
+The manifest declares `POST_NOTIFICATIONS`. On Android 13 and newer, the list
+screen shows a small user-initiated permission banner. The first tap requests
+permission; after a rejected request, the UI uses the rationale when Android
+offers one and otherwise links to app notification settings. Older Android
+versions do not show the banner, and denial never blocks reminder CRUD.
+
+The debug variant includes a temporary exported `adb` receiver that posts or
+cancels sample DUE/TOMORROW notifications. It is not part of release builds
+and does not schedule alarms. Phase 4 will connect derived schedule state to
+these APIs; Phase 5 will implement the action behavior.
 
 ## Reliability and privacy
 
@@ -213,7 +238,9 @@ recurrence instances, revisions, or time zones.
 
 ## Testing strategy
 
-Pure recurrence, validation, and presentation tests are ordinary JUnit tests.
+Pure recurrence, validation, presentation, notification eligibility, identity,
+and permission-policy tests are ordinary JUnit tests. AndroidX tests cover
+NotificationCompat action sets, channel idempotency, and PendingIntent identity.
 Room DAO tests cover persistence and event history. AndroidX tests cover
 repository-backed list/editor ViewModels and the high-value empty-state Compose
 path. Scheduling tests will verify stable identifiers, cancellation/reschedule

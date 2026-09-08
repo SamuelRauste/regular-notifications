@@ -24,6 +24,18 @@ class NotificationIdentityTest {
             NotificationIdentity.alarmRequestCode(42, NotificationKind.DUE),
         )
         assertEquals("regular-notifications://tomorrow/42", NotificationIdentity.pendingIntentData(42, NotificationKind.TOMORROW))
+        assertEquals(
+            "regular-notifications://alarm/due/42",
+            NotificationIdentity.alarmPendingIntentData(42, NotificationKind.DUE),
+        )
+        assertNotEquals(
+            NotificationIdentity.alarmPendingIntentData(42, NotificationKind.DUE),
+            NotificationIdentity.alarmPendingIntentData(42, NotificationKind.TOMORROW),
+        )
+        assertNotEquals(
+            NotificationIdentity.contentPendingIntentData(42, NotificationKind.DUE),
+            NotificationIdentity.contentPendingIntentData(42, NotificationKind.TOMORROW),
+        )
         assertNotEquals(
             NotificationIdentity.actionPendingIntentData(42, NotificationKind.DUE, "done"),
             NotificationIdentity.actionPendingIntentData(42, NotificationKind.DUE, "dismiss"),

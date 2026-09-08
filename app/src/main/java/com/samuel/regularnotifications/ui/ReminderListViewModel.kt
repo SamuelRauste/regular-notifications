@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.samuel.regularnotifications.data.ReminderRepository
+import com.samuel.regularnotifications.data.ReminderService
 import com.samuel.regularnotifications.data.RepositoryActionResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ReminderListViewModel(
-    private val repository: ReminderRepository,
+    private val service: ReminderService,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReminderListUiState())
     val uiState = _uiState.asStateFlow()
@@ -29,13 +29,13 @@ class ReminderListViewModel(
 
     fun setEnabled(reminderId: Long, enabled: Boolean) {
         runAction {
-            repository.setEnabled(reminderId, enabled)
+            service.setEnabled(reminderId, enabled)
         }
     }
 
     fun delete(reminderId: Long) {
         runAction {
-            repository.deleteReminder(reminderId)
+            service.deleteReminder(reminderId)
         }
     }
 
@@ -50,7 +50,7 @@ class ReminderListViewModel(
 
     private fun observeReminders() {
         viewModelScope.launch {
-            repository.observeReminders()
+            service.observeReminders()
                 .map { reminders -> reminders.map { it.toReminderListItem() } }
                 .catch { error ->
                     if (error is CancellationException) throw error
@@ -75,7 +75,7 @@ class ReminderListViewModel(
     private fun refreshDerivedSchedule() {
         viewModelScope.launch {
             try {
-                repository.reconcileAll()
+                service.reconcileAll()
             } catch (error: Throwable) {
                 if (error is CancellationException) throw error
                 _uiState.update {
@@ -110,8 +110,8 @@ class ReminderListViewModel(
     }
 
     companion object {
-        fun factory(repository: ReminderRepository): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ReminderListViewModel(repository) }
+        fun factory(service: ReminderService): ViewModelProvider.Factory = viewModelFactory {
+            initializer { ReminderListViewModel(service) }
         }
     }
 }

@@ -94,6 +94,12 @@ data class ReminderScheduleState(
     val lastResolvedNormalOccurrenceIndex: Long? = null,
 )
 
+/** Room-reconciled state passed to the Android scheduling boundary. */
+data class ReminderSchedulingSnapshot(
+    val definition: ReminderDefinition,
+    val state: ReminderScheduleState,
+)
+
 enum class ReminderEventType {
     DONE,
     DISMISSED,

@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.samuel.regularnotifications.data.ReminderRepository
+import com.samuel.regularnotifications.data.ReminderService
 import com.samuel.regularnotifications.data.RepositoryActionResult
 import com.samuel.regularnotifications.domain.ReminderDraft
 import com.samuel.regularnotifications.domain.ReminderFormField
@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class ReminderEditorViewModel(
-    private val repository: ReminderRepository,
+    private val service: ReminderService,
     private val reminderId: Long?,
     clock: Clock = Clock.systemDefaultZone(),
 ) : ViewModel() {
@@ -87,9 +87,9 @@ class ReminderEditorViewModel(
             _uiState.update { it.copy(isSaving = true, errorMessage = null) }
             try {
                 if (reminderId == null) {
-                    repository.createReminder(input)
+                    service.createReminder(input)
                 } else {
-                    val result = repository.updateReminder(reminderId, input)
+                    val result = service.updateReminder(reminderId, input)
                     if (result != RepositoryActionResult.APPLIED) {
                         showSaveFailure(result)
                         return@launch
@@ -112,7 +112,7 @@ class ReminderEditorViewModel(
     private fun loadReminder(id: Long) {
         viewModelScope.launch {
             try {
-                val reminder = repository.observeReminder(id).first()
+                val reminder = service.observeReminder(id).first()
                 if (reminder == null) {
                     _uiState.update {
                         it.copy(
@@ -179,10 +179,10 @@ class ReminderEditorViewModel(
 
     companion object {
         fun factory(
-            repository: ReminderRepository,
+            service: ReminderService,
             reminderId: Long?,
         ): ViewModelProvider.Factory = viewModelFactory {
-            initializer { ReminderEditorViewModel(repository, reminderId) }
+            initializer { ReminderEditorViewModel(service, reminderId) }
         }
     }
 }

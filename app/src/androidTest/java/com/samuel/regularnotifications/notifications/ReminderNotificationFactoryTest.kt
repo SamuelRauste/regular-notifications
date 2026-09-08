@@ -27,6 +27,12 @@ class ReminderNotificationFactoryTest {
         assertEquals("Bins by the door", notification.extras.getString(Notification.EXTRA_TEXT))
         assertEquals(listOf("Done", "Dismiss", "+1 day"), notification.actionTitles())
         assertFalse(notification.actionTitles().contains("Seen"))
+        assertNotNull(notification.contentIntent)
+        assertEquals(
+            notification.contentIntent,
+            NotificationContentIntent.create(context, reminderId = 42, kind = NotificationKind.DUE),
+        )
+        assertNotEquals(notification.contentIntent, notification.actions[0].actionIntent)
     }
 
     @Test
@@ -42,6 +48,11 @@ class ReminderNotificationFactoryTest {
         assertFalse(notification.actionTitles().contains("Done"))
         assertFalse(notification.actionTitles().contains("Dismiss"))
         assertFalse(notification.actionTitles().contains("+1 day"))
+        assertNotNull(notification.contentIntent)
+        assertEquals(
+            notification.contentIntent,
+            NotificationContentIntent.create(context, reminderId = 42, kind = NotificationKind.TOMORROW),
+        )
     }
 
     @Test

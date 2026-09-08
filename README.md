@@ -9,13 +9,12 @@ advertisements, or network access.
 
 ## Status
 
-Phase 3 is complete: the app has its notification channel, DUE and TOMORROW
-notification factory, action PendingIntent contract, and Android 13+
-notification-permission UX. The app can create, view, edit, enable, disable,
-and delete local reminders through a short Compose/Material 3 interface.
-AlarmManager scheduling and recurring delivery are Phase 4; action processing
-is Phase 5. Android instrumentation tests compile but still need a usable
-phone or emulator to run.
+Phase 4 is complete: enabled reminders now use Room-derived, one-shot inexact
+AlarmManager scheduling, alarm delivery, startup reconciliation, and boot/clock/
+time-zone recovery. The app can create, view, edit, enable, disable, and delete
+local reminders through a short Compose/Material 3 interface. Notification
+action processing remains Phase 5. Android instrumentation tests compile but
+still need a usable phone or emulator to run.
 
 ## Prerequisites
 
@@ -38,6 +37,7 @@ Run from the repository root in PowerShell:
 .\gradlew.bat assembleDebug
 .\gradlew.bat test
 .\gradlew.bat lint
+.\gradlew.bat assembleAndroidTest
 ```
 
 The debug APK will be under `app/build/outputs/apk/debug/`.
@@ -66,9 +66,11 @@ The main screen is a simple reminder list. Each card shows its title, repeat
 schedule, next occurrence, status, and direct controls for enabling, editing,
 and deleting it. The `+ Add` button opens a short form: title, optional
 description, first date/time, and `Every [X] days`. New reminders default to
-Every 1 day. When notification delivery is added, Tomorrow previews will be
-automatic for intervals of 2 or more days; there is no preview setting in the
-form.
+Every 1 day. Tomorrow previews are automatic for intervals of 2 or more days;
+there is no preview setting in the form. Enabled reminders are scheduled from
+Room state using one-shot inexact `AlarmManager.setAndAllowWhileIdle` alarms.
+The app reconciles alarms at startup and after reboot, clock changes, and
+time-zone changes. Notification action buttons remain inert until Phase 5.
 
 ## Inspect Phase 3 notifications
 
@@ -85,7 +87,7 @@ adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNo
 Repeating a SHOW command with the same reminder ID replaces the same logical
 notification. The debug receiver is excluded from release builds. Its action
 buttons are contract stubs until Phase 5, and the commands do not schedule
-future reminders.
+future reminders; the normal app scheduler does.
 
 ## Run on a physical phone
 
@@ -99,10 +101,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 On Android 13 and newer, the app asks for `POST_NOTIFICATIONS` only after the
 user taps the non-blocking permission banner. Denial does not prevent reminder
 management; the banner offers Android notification settings when another
-permission prompt is no longer appropriate. Notification delivery will also
-depend on Android's alarm and battery-management policies once Phase 4 exists.
-The planned scheduler uses reasonably punctual inexact one-shot `AlarmManager`
-alarms and does not request exact-alarm special access.
+permission prompt is no longer appropriate. Delivery depends on Android's
+alarm and battery-management policies. The scheduler uses reasonably punctual
+inexact one-shot `AlarmManager` alarms and does not request exact-alarm special
+access.
 
 Every-X-days recurrences preserve local wall-clock time across daylight-saving
 and time-zone changes. Android may delay alarms, especially in battery saver or

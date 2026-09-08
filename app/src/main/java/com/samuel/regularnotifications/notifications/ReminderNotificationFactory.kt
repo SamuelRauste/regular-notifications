@@ -34,6 +34,13 @@ class ReminderNotificationFactory(
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(
+                NotificationContentIntent.create(
+                    context = applicationContext,
+                    reminderId = input.reminderId,
+                    kind = NotificationKind.DUE,
+                ),
+            )
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOnlyAlertOnce(true)
@@ -75,6 +82,13 @@ class ReminderNotificationFactory(
             .setContentTitle("Tomorrow: $title")
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(
+                NotificationContentIntent.create(
+                    context = applicationContext,
+                    reminderId = input.reminderId,
+                    kind = NotificationKind.TOMORROW,
+                ),
+            )
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOnlyAlertOnce(true)

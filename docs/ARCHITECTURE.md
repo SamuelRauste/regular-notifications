@@ -28,16 +28,16 @@ derived state and must be safe to cancel and recreate from stored reminders.
 
 Phase 2 adds the Compose reminder-management UI on top of the persisted,
 pure-Kotlin recurrence/state model. Phase 3 adds notification presentation,
-permission UX, and action contracts. AlarmManager scheduling and action
-business logic remain later phases.
+permission UX, and action contracts. Phase 4 adds Room-derived AlarmManager
+scheduling and delivery. Phase 5 will add notification action business logic.
 
 ## Planned packages
 
 - `data`: Room entities, DAOs, database, and repository.
 - `domain`: reminder models, validation, event semantics, and pure recurrence calculation.
-- `scheduling`: `ReminderScheduler` and the `AlarmManager` implementation.
+- `scheduling`: `ReminderScheduler`, the `AlarmManager` implementation, and
+  alarm/recovery receivers.
 - `notifications`: channel, notification factory, and action handling.
-- `receivers`: alarm delivery, notification actions, boot, and time/time-zone changes.
 - `ui`: reminder list/editor models, ViewModels, screens, and Compose navigation.
 
 `RegularNotificationsApplication` owns one lazy `AppContainer` per app
@@ -171,19 +171,49 @@ need no configuration: the state model makes them eligible only for
 
 ## Scheduling and identity
 
-Every reminder gets individually derived request codes and/or intent data from
-its stable database ID. Saving an edit first cancels the old alarm for that ID,
-then schedules the current enabled state. Disable cancels it; delete cancels
-the alarm and associated visible notifications before deleting the row.
+`ReminderService` coordinates Room mutations with `ReminderScheduler`, so create,
+edit, enable, disable, and delete operations update derived alarms without
+making the repository Android-aware. The application container owns one
+`AlarmManagerReminderScheduler` and one repository; receivers reuse that same
+container.
 
-The scheduler uses one-shot inexact `AlarmManager` alarms behind an interface.
-It must be idempotent, avoid long-running services, and tolerate a receiver
-running after the reminder was deleted. Boot and relevant clock/time-zone
-receivers query enabled reminders and reconstruct alarms. A future receiver
-that needs Room or scheduling work must use `goAsync()` and call
-`PendingResult.finish()` in all completion/error paths, or use another Android
-component with an equivalent lifecycle guarantee. Unmanaged coroutines started
-directly from `onReceive()` are not acceptable.
+`AlarmManagerReminderScheduler` calls
+`AlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis,
+pendingIntent)` for individually scheduled, one-shot inexact alarms. This API
+can run during Doze but remains subject to Android batching and delay. The app
+does not declare or request `SCHEDULE_EXACT_ALARM` or `USE_EXACT_ALARM`, and it
+does not use WorkManager as the reminder timer.
+
+`AlarmSchedulePlanner` is pure Kotlin. For an enabled reminder it schedules a
+DUE alarm at the outstanding due time, or at the next normal occurrence when
+there is no outstanding due state. It schedules TOMORROW only when the
+persisted preview is unacknowledged, still targets a future occurrence, and the
+shared `supportsTomorrow(intervalDays)` rule allows it. An outstanding DUE
+state suppresses TOMORROW. Disabled reminders produce no alarms.
+
+The scheduler first calls Room reconciliation and only then derives alarms from
+the returned snapshot. Repeated reconciliation replaces the same PendingIntent
+or cancels it, so editing, recovery, and startup are idempotent. A delivery
+reconciles again using the current `ZoneId`, compares the alarm's expected
+revision with the current due/preview revision, and ignores stale or early
+work. Valid delivery posts through `ReminderNotificationManager`; the one-shot
+alarm is not immediately recreated while its notification remains visible.
+
+Alarm PendingIntents use explicit, immutable broadcasts to
+`AlarmDeliveryReceiver`. Their data URI contains the full reminder ID and
+notification kind; the hashed request code is only an additional lookup key,
+not the sole identity. DUE and TOMORROW therefore remain distinct even if a
+32-bit hash were ever to collide. Cancellation creates the same deterministic
+identity.
+
+`AlarmDeliveryReceiver` and `SchedulingRecoveryReceiver` call `goAsync()` and
+run short Room/scheduling work on the application scope. Every path calls
+`PendingResult.finish()`, including failures. The recovery receiver handles
+`BOOT_COMPLETED`, `TIME_SET`, and `TIMEZONE_CHANGED`; application startup also
+performs a full reconciliation. Reconciliation recalculates local-wall-clock
+occurrences in the current zone, so a 09:00 reminder remains 09:00 after travel
+and old alarm trigger times are replaced. Deleted or disabled reminders are
+safe when a previously delivered alarm races with the database change.
 
 ## Notifications and permissions
 
@@ -217,14 +247,17 @@ versions do not show the banner, and denial never blocks reminder CRUD.
 
 The debug variant includes a temporary exported `adb` receiver that posts or
 cancels sample DUE/TOMORROW notifications. It is not part of release builds
-and does not schedule alarms. Phase 4 will connect derived schedule state to
-these APIs; Phase 5 will implement the action behavior.
+and does not schedule alarms. Notification body taps now use a stable immutable
+activity PendingIntent to open the existing main reminder list. Phase 5 will
+implement the action behavior; the production action receiver remains inert.
 
 ## Reliability and privacy
 
-Receivers do short database/scheduling work using coroutines as appropriate.
-No network permission, accounts, analytics, advertisements, or cloud sync are
-planned. Diagnostic logs may include IDs and operation outcomes, but not title
+Receivers do short database/scheduling work using `goAsync()` and the
+application scope. The receiver never trusts alarm extras without reloading
+Room state and checking the current revision. No network permission, accounts,
+analytics, advertisements, or cloud sync are planned. Diagnostic logs may
+include IDs and operation outcomes, but not title
 or description text. Android can delay inexact alarms and can suppress alarms
 after an explicit force-stop until the app is opened again; both limitations
 will be documented and manually tested.
@@ -240,7 +273,10 @@ recurrence instances, revisions, or time zones.
 
 Pure recurrence, validation, presentation, notification eligibility, identity,
 and permission-policy tests are ordinary JUnit tests. AndroidX tests cover
-NotificationCompat action sets, channel idempotency, and PendingIntent identity.
+NotificationCompat action sets, channel idempotency, content/action PendingIntent
+identity, and alarm PendingIntent identity. Pure alarm planner/delivery tests
+cover enabled/disabled schedules, daily eligibility, acknowledgement, due
+precedence, stale revisions, and early delivery.
 Room DAO tests cover persistence and event history. AndroidX tests cover
 repository-backed list/editor ViewModels and the high-value empty-state Compose
 path. Scheduling tests will verify stable identifiers, cancellation/reschedule

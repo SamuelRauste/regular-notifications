@@ -11,6 +11,7 @@ import com.samuel.regularnotifications.domain.ReminderDraft
 import com.samuel.regularnotifications.domain.ReminderEventType
 import com.samuel.regularnotifications.domain.ReminderInput
 import com.samuel.regularnotifications.domain.ReminderScheduleState
+import com.samuel.regularnotifications.domain.ReminderSchedulingSnapshot
 import com.samuel.regularnotifications.domain.ReminderStateMachine
 import com.samuel.regularnotifications.domain.ReminderValidator
 import com.samuel.regularnotifications.domain.RecurrenceCalculator
@@ -169,8 +170,40 @@ class ReminderRepository(
     suspend fun reconcileAll(
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
-    ) = database.withTransaction {
-        reminderDao.getAll().forEach { reconcileStored(it, now, zoneId) }
+    ) {
+        reconcileAllForScheduling(zoneId = zoneId, now = now)
+    }
+
+    /**
+     * Reconciles one reminder in Room and returns the exact state from which
+     * Android alarms may be derived. A missing row means that any old alarm
+     * for the ID must be cancelled by the caller.
+     */
+    suspend fun reconcileReminderForScheduling(
+        id: Long,
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        now: Instant = clock(),
+    ): ReminderSchedulingSnapshot? = database.withTransaction {
+        val reminder = reminderDao.getById(id) ?: return@withTransaction null
+        val state = reconcileStored(reminder, now, zoneId)
+        ReminderSchedulingSnapshot(
+            definition = requireNotNull(reminderDao.getById(id)).toDefinition(),
+            state = state,
+        )
+    }
+
+    /** Reconciles every Room row, making a complete alarm rebuild possible. */
+    suspend fun reconcileAllForScheduling(
+        zoneId: ZoneId = ZoneId.systemDefault(),
+        now: Instant = clock(),
+    ): List<ReminderSchedulingSnapshot> = database.withTransaction {
+        reminderDao.getAll().map { reminder ->
+            val state = reconcileStored(reminder, now, zoneId)
+            ReminderSchedulingSnapshot(
+                definition = requireNotNull(reminderDao.getById(reminder.id)).toDefinition(),
+                state = state,
+            )
+        }
     }
 
     suspend fun postpone(

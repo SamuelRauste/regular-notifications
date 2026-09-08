@@ -29,7 +29,7 @@ fun RegularNotificationsApp(
     ) {
         composable(ReminderListRoute) {
             val viewModel: ReminderListViewModel = viewModel(
-                factory = ReminderListViewModel.factory(appContainer.reminderRepository),
+                factory = ReminderListViewModel.factory(appContainer.reminderService),
             )
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -55,7 +55,7 @@ fun RegularNotificationsApp(
                 ?.takeUnless { it == "new" }
                 ?.toLongOrNull()
             val viewModel: ReminderEditorViewModel = viewModel(
-                factory = ReminderEditorViewModel.factory(appContainer.reminderRepository, reminderId),
+                factory = ReminderEditorViewModel.factory(appContainer.reminderService, reminderId),
             )
 
             ReminderEditorScreen(

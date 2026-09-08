@@ -46,12 +46,12 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 4 — Alarm scheduling and delivery
 
-- [ ] Define `ReminderScheduler` and implement one-shot inexact `AlarmManager` scheduling for applicable `DUE` and `TOMORROW` states.
-- [ ] Use stable `(reminderId, notification kind)` identities in unique `PendingIntent`s and notification IDs.
-- [ ] Implement alarm delivery receiver and database-backed next-occurrence calculation.
-- [ ] Make scheduling/cancellation idempotent and safe when a reminder was deleted before delivery; never schedule Tomorrow for every-1-day reminders.
-- [ ] Reconstruct both applicable alarm kinds from Room-derived state after boot, time, and time-zone recovery.
-- [ ] Add scheduling identifier and delivery tests.
+- [x] Define `ReminderScheduler` and implement one-shot inexact `AlarmManager` scheduling for applicable `DUE` and `TOMORROW` states.
+- [x] Use stable `(reminderId, notification kind)` identities in unique immutable `PendingIntent`s and notification IDs.
+- [x] Implement alarm delivery receiver and database-backed next-occurrence reconciliation.
+- [x] Make scheduling/cancellation idempotent and safe when a reminder was deleted before delivery; never schedule Tomorrow for every-1-day reminders.
+- [x] Reconstruct both applicable alarm kinds from Room-derived state after boot, time, and time-zone recovery.
+- [x] Add pure scheduling/delivery tests and Android PendingIntent/content-intent tests.
 
 ## Phase 5 — Notification actions
 
@@ -65,8 +65,8 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 6 — Recovery and history
 
-- [ ] Reschedule enabled reminders after boot, time change, and time-zone change.
-- [ ] Reconstruct alarms from Room as the source of truth.
+- [ ] Extend the Phase 4 lightweight boot/time/time-zone recovery with the remaining recovery/history behavior and physical-device validation.
+- [x] Reconstruct Phase 4 alarms from Room as the source of truth.
 - [ ] Add history screen/section and event display.
 - [ ] Handle process death and missed alarms without notification storms.
 - [ ] Add recovery and history tests.
@@ -103,6 +103,12 @@ are marked complete only after the relevant checks have been run.
 - NotificationManager identity is `(tag containing full reminder ID and kind, stable small kind ID)`, so notification tags prevent 64-bit-to-32-bit ID collisions. Action PendingIntents carry reminder ID, kind, action, and expected revision, use stable data/request identity, and are immutable.
 - `POST_NOTIFICATIONS` is requested only after the user taps the permission banner on Android 13+; denied permission leaves CRUD usable and can link to app notification settings. The debug-only adb receiver exercises notifications before Phase 4.
 - Phase 3 does not schedule alarms or mutate Room from notification actions. AlarmManager delivery is Phase 4; Done, Dismiss, +1 day, Seen, and swipe-action processing are Phase 5.
+- Phase 4 uses `AlarmManager.setAndAllowWhileIdle(RTC_WAKEUP, ...)` for one-shot inexact alarms. It deliberately requests no exact-alarm permission and does not use WorkManager as the primary timer.
+- `ReminderService` coordinates CRUD with `ReminderScheduler`; the repository stays Android-free. The application container owns one scheduler and one Room repository, and startup plus narrow boot/time/time-zone receivers reconcile all rows.
+- Alarm PendingIntent data contains the full reminder ID and notification kind. The integer request-code hash is not the sole identity. Alarm delivery re-reconciles Room state and accepts only current expected revisions; a DUE seed revision of zero is used only for the future next-normal alarm.
+- Valid alarm delivery posts through the Phase 3 notification manager and does not immediately recreate the delivered one-shot alarm. A later reconciliation can safely rebuild it from Room if the visible notification is lost.
+- Notification body taps use a stable immutable activity PendingIntent that opens the main list; action PendingIntents remain inert until Phase 5.
+- `supportsTomorrow(intervalDays)` is the shared pure eligibility rule used by the state machine and notification/scheduling code.
 - Tomorrow previews are acknowledged per logical normal occurrence and use one `Seen` action. They are suppressed when the reminder is already due and are not replayed when obsolete after recovery.
 - Every-1-day reminders never create Tomorrow preview state or Tomorrow notifications. For eligible schedules, an existing preview remains current after `previewAt` until Seen, supersession, or the actual occurrence becoming due; a missing past preview is not replayed during recovery.
 - A Tomorrow revision changes whenever its occurrence instant, preview instant, or time zone changes, and stays stable for an unchanged reconciliation.
@@ -113,7 +119,7 @@ are marked complete only after the relevant checks have been run.
 - Any asynchronous receiver work must use a receiver lifecycle mechanism such as `goAsync()`/`PendingResult.finish()`; unmanaged `onReceive()` coroutines are prohibited.
 - The main UI must be understandable in under one minute: direct controls, obvious labels, sensible defaults, few screens, and no unnecessary onboarding or advanced settings.
 
-## Phase 1, Phase 2, and Phase 3 verification note
+## Phase 1, Phase 2, Phase 3, and Phase 4 verification note
 
 The simplified Every-X-days Phase 1 checkpoint passed the JVM suite, lint,
 debug APK, and Android-test APK compilation before Phase 2 began. The final
@@ -124,3 +130,10 @@ currently usable in this environment.
 Phase 3 verification passed the JVM suite, lint, debug APK, and Android-test APK
 compilation. Connected instrumentation remains pending a usable phone or
 emulator; the current adb process cannot create its Android user directory.
+
+Phase 4 verification passed `test`, `lint`, `assembleDebug`, and
+`assembleAndroidTest`. Connected instrumentation was not run because no usable
+device or emulator is available. Physical testing is still required for actual
+AlarmManager timing, lock-screen delivery, battery saver/Doze behavior, reboot,
+time-zone changes, notification body taps, and vendor-specific background
+policies.

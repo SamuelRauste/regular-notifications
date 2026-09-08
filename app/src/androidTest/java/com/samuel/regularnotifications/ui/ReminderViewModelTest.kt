@@ -5,9 +5,12 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.samuel.regularnotifications.data.ReminderRepository
+import com.samuel.regularnotifications.data.ReminderService
 import com.samuel.regularnotifications.data.local.ReminderDatabase
 import com.samuel.regularnotifications.domain.ReminderFormField
 import com.samuel.regularnotifications.domain.ReminderInput
+import com.samuel.regularnotifications.scheduling.AlarmDeliveryRequest
+import com.samuel.regularnotifications.scheduling.ReminderScheduler
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -34,6 +37,7 @@ class ReminderViewModelTest {
     private val now = Instant.parse("2026-01-01T10:00:00Z")
     private lateinit var database: ReminderDatabase
     private lateinit var repository: ReminderRepository
+    private lateinit var service: ReminderService
 
     @Before
     fun setUp() {
@@ -42,6 +46,7 @@ class ReminderViewModelTest {
             .allowMainThreadQueries()
             .build()
         repository = ReminderRepository(database, clock = { now })
+        service = ReminderService(repository, NoOpReminderScheduler)
     }
 
     @After
@@ -51,7 +56,7 @@ class ReminderViewModelTest {
 
     @Test
     fun listViewModelReflectsCreateEnableDisableAndDelete() = runBlocking {
-        val viewModel = ReminderListViewModel(repository)
+        val viewModel = ReminderListViewModel(service)
         viewModel.uiState.await { !it.isLoading && it.reminders.isEmpty() }
 
         val reminderId = repository.createReminder(input(), utc, now)
@@ -74,7 +79,7 @@ class ReminderViewModelTest {
     @Test
     fun editorViewModelCreatesAndEditsTheSimpleDayIntervalForm() = runBlocking {
         val clock = Clock.fixed(now, utc)
-        val createViewModel = ReminderEditorViewModel(repository, reminderId = null, clock = clock)
+        val createViewModel = ReminderEditorViewModel(service, reminderId = null, clock = clock)
         createViewModel.updateTitle("  Take out trash  ")
         createViewModel.updateDescription("  Bins by the door  ")
         createViewModel.updateFirstDate(LocalDate.of(2026, 1, 5))
@@ -92,7 +97,7 @@ class ReminderViewModelTest {
         assertEquals("Bins by the door", created.description)
         assertEquals(7, created.intervalDays)
 
-        val editViewModel = ReminderEditorViewModel(repository, created.id, clock)
+        val editViewModel = ReminderEditorViewModel(service, created.id, clock)
         val loaded = editViewModel.uiState.await { !it.isLoading }
         assertEquals("Take out trash", loaded.title)
         assertEquals("7", loaded.intervalDays)
@@ -112,7 +117,7 @@ class ReminderViewModelTest {
 
     @Test
     fun editorViewModelShowsAnInlineErrorForAnIntervalBelowOneDay() {
-        val viewModel = ReminderEditorViewModel(repository, reminderId = null, Clock.fixed(now, utc))
+        val viewModel = ReminderEditorViewModel(service, reminderId = null, Clock.fixed(now, utc))
         viewModel.updateTitle("Water plants")
         viewModel.updateIntervalDays("0")
 
@@ -131,4 +136,18 @@ class ReminderViewModelTest {
         firstOccurrence = LocalDateTime.of(2026, 1, 10, 9, 0),
         intervalDays = 7,
     )
+
+    private object NoOpReminderScheduler : ReminderScheduler {
+        override suspend fun reconcileReminder(reminderId: Long, now: Instant, zoneId: ZoneId) = Unit
+
+        override suspend fun reconcileAll(now: Instant, zoneId: ZoneId) = Unit
+
+        override suspend fun deliver(request: AlarmDeliveryRequest, now: Instant, zoneId: ZoneId) = Unit
+
+        override fun cancelDue(reminderId: Long) = Unit
+
+        override fun cancelTomorrow(reminderId: Long) = Unit
+
+        override fun cancelAll(reminderId: Long) = Unit
+    }
 }

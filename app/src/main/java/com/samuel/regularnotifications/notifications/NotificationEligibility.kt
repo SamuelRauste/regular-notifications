@@ -1,3 +1,5 @@
 package com.samuel.regularnotifications.notifications
 
-fun supportsTomorrowNotification(intervalDays: Int): Boolean = intervalDays >= 2
+import com.samuel.regularnotifications.domain.supportsTomorrow
+
+fun supportsTomorrowNotification(intervalDays: Int): Boolean = supportsTomorrow(intervalDays)

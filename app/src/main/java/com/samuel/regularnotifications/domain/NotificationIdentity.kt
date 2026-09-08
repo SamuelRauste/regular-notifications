@@ -30,7 +30,16 @@ object NotificationIdentity {
         target(reminderId, kind).notificationId
 
     fun alarmRequestCode(reminderId: Long, kind: NotificationKind): Int =
-        stableInt("alarm/${pendingIntentData(reminderId, kind)}")
+        stableInt("alarm/${alarmPendingIntentData(reminderId, kind)}")
+
+    fun alarmPendingIntentData(reminderId: Long, kind: NotificationKind): String =
+        "regular-notifications://alarm/${kind.uriSegment}/$reminderId"
+
+    fun contentPendingIntentData(reminderId: Long, kind: NotificationKind): String =
+        "regular-notifications://open/${kind.uriSegment}/$reminderId"
+
+    fun contentPendingIntentRequestCode(reminderId: Long, kind: NotificationKind): Int =
+        stableInt("content/${contentPendingIntentData(reminderId, kind)}")
 
     fun pendingIntentData(reminderId: Long, kind: NotificationKind): String =
         "regular-notifications://${kind.uriSegment}/$reminderId"

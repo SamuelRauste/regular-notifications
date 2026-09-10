@@ -86,10 +86,12 @@ anchor date/time and recalculate in the device's current `ZoneId`, so a 09:00
 Every 7 days reminder follows 09:00 after a Finland-to-Japan time-zone change.
 Java time's normal `LocalDateTime.atZone()` rules handle DST gaps and overlaps.
 
-The scheduler uses inexact one-shot alarms. Exact-alarm permission is not part
-of the design. A recovery calculation finds the latest normal occurrence that
-is due and the first future normal occurrence, collapsing all missed normal
-occurrences for a reminder into one outstanding due state.
+The scheduler uses one-shot alarms and prefers exact delivery. When
+`canScheduleExactAlarms()` is true, both DUE and TOMORROW use
+`setExactAndAllowWhileIdle`; otherwise both use `setAndAllowWhileIdle` as a
+graceful fallback. A recovery calculation finds the latest normal occurrence
+that is due and the first future normal occurrence, collapsing all missed
+normal occurrences for a reminder into one outstanding due state.
 
 ## Phase 1 persisted state model
 
@@ -196,11 +198,15 @@ cascade its outstanding state and history. A stale delivery after deletion
 reloads Room, finds no reminder, and safely cancels without posting.
 
 `AlarmManagerReminderScheduler` calls
-`AlarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis,
-pendingIntent)` for individually scheduled, one-shot inexact alarms. This API
-can run during Doze but remains subject to Android batching and delay. The app
-does not declare or request `SCHEDULE_EXACT_ALARM` or `USE_EXACT_ALARM`, and it
-does not use WorkManager as the reminder timer.
+`AlarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,
+triggerAtMillis, pendingIntent)` for individually scheduled, one-shot alarms
+when `AlarmManager.canScheduleExactAlarms()` allows it. If the special access is
+unavailable, it calls `setAndAllowWhileIdle` with the same PendingIntent
+identity. The exact call is guarded for API 31+, and a `SecurityException`
+race falls back to the inexact call instead of crashing. Both APIs remain
+subject to Android timing and battery-management behavior; exact does not mean
+mathematically zero-delay delivery. The app declares `SCHEDULE_EXACT_ALARM`,
+not `USE_EXACT_ALARM`, and does not use WorkManager as the reminder timer.
 
 `AlarmSchedulePlanner` is pure Kotlin. For a reminder whose effective enabled
 state is `masterEnabled && reminder.enabled`, it schedules a
@@ -229,8 +235,10 @@ identity.
 `AlarmDeliveryReceiver` and `SchedulingRecoveryReceiver` call `goAsync()` and
 run short Room/scheduling work on the application scope. Every path calls
 `PendingResult.finish()`, including failures. The recovery receiver handles
-`BOOT_COMPLETED`, `TIME_SET`, and `TIMEZONE_CHANGED`; application startup also
-performs a full reconciliation. Reconciliation recalculates local-wall-clock
+`BOOT_COMPLETED`, `TIME_SET`, `TIMEZONE_CHANGED`, and
+`ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED`; it re-checks the
+capability before reconciling. Application startup and list-screen resume also
+reconcile when appropriate. Reconciliation recalculates local-wall-clock
 occurrences in the current zone, so a 09:00 reminder remains 09:00 after travel
 and old alarm trigger times are replaced. Deleted or disabled reminders are
 safe when a previously delivered alarm races with the database change.
@@ -271,6 +279,17 @@ permission transition, it requests one scheduling reconciliation. Startup also
 reconciles, so opening the app after granting permission is sufficient even if
 the app was not running while the setting changed.
 
+Exact-alarm access is a separate control as well. On Android 12 and newer the
+manifest requests `SCHEDULE_EXACT_ALARM`, not `USE_EXACT_ALARM`. The list shows a
+non-blocking explanation and opens `ACTION_REQUEST_SCHEDULE_EXACT_ALARM` only
+after the user taps it. On resume, the UI re-checks the capability; a change in
+either direction triggers one Room-derived reconciliation. The permission
+state-change receiver also uses `goAsync()`, verifies the current capability,
+and reconciles all reminders. If access is revoked, Android may delete exact
+alarms already scheduled by the app; the next startup, recovery broadcast, or
+resume rebuilds the inexact fallback without changing Room state or the master
+switch.
+
 ## Notifications and permissions
 
 Phase 3 creates one idempotent `Reminders` notification channel with ordinary
@@ -295,11 +314,15 @@ stable, and they use `FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE`. The receiver is an
 inert Phase 3 stub that only logs the action name; Phase 5 will add repository
 mutations and notification cancellation.
 
-The manifest declares `POST_NOTIFICATIONS`. On Android 13 and newer, the list
-screen shows a small user-initiated permission banner. The first tap requests
+The manifest declares `POST_NOTIFICATIONS` and `SCHEDULE_EXACT_ALARM`. On
+Android 13 and newer, the list screen shows a small user-initiated notification
+permission banner. On Android 12 and newer, it independently shows the
+exact-alarm access banner when needed. The first notification tap requests
 permission; after a rejected request, the UI uses the rationale when Android
-offers one and otherwise links to app notification settings. Older Android
-versions do not show the banner, and denial never blocks reminder CRUD.
+offers one and otherwise links to app notification settings. The exact-alarm
+button opens the special-access screen and is never launched automatically.
+Older Android versions do not show the relevant banner, and neither permission
+blocks reminder CRUD.
 
 The debug variant includes a temporary exported `adb` receiver that posts or
 cancels sample DUE/TOMORROW notifications. It is not part of release builds
@@ -317,10 +340,10 @@ notification: Android may terminate the process and later start the explicit
 alarm receiver. No network permission, accounts,
 analytics, advertisements, or cloud sync are planned. Diagnostic logs may
 include IDs and operation outcomes, but not title
-or description text. Android can delay inexact alarms and can suppress alarms
-and receivers after an explicit Force Stop until the app is opened again. The
-app does not attempt to bypass that platform behavior; it is documented and
-manually tested.
+or description text. Android can still delay alarms, including exact alarms,
+and can suppress alarms and receivers after an explicit Force Stop until the
+app is opened again. The app does not attempt to bypass that platform behavior;
+it is documented and manually tested.
 
 The primary user experience is intentionally low-friction: one main reminder
 list, a prominent add action, direct enable/edit/delete controls, sensible
@@ -332,7 +355,7 @@ recurrence instances, revisions, or time zones.
 ## Testing strategy
 
 Pure recurrence, validation, presentation, notification eligibility, identity,
-permission-transition policy, and global alarm-planning tests are ordinary
+permission-transition policy, exact-alarm selection, and global alarm-planning tests are ordinary
 JUnit tests. AndroidX tests cover
 NotificationCompat action sets, channel idempotency, content/action PendingIntent
 identity, and alarm PendingIntent identity. Pure alarm planner/delivery tests

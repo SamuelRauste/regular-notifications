@@ -10,6 +10,15 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] On Android 13+, verify the app shows a non-blocking notification-permission banner and only opens the permission dialog after its action is tapped.
 - [ ] Grant notification permission; repeat the suite with it denied and verify reminder CRUD still works.
 - [ ] With an outstanding due reminder and notification permission denied, grant permission from the banner or Android Settings and verify the reminder can appear without restarting the app or changing the clock. Verify this does not create a duplicate notification.
+- [ ] On Android 12+, verify the separate non-blocking `Alarms & reminders`
+  banner appears when exact access is unavailable. Tap `Allow alarms & reminders`
+  and confirm the app opens its package-specific special-access screen only as a
+  result of that tap.
+- [ ] Grant exact-alarm access and verify the banner disappears after returning
+  to the app. Revoke it later and verify the banner returns while CRUD remains
+  usable and reminders use the inexact fallback.
+- [ ] Verify notification permission and exact-alarm access are independent:
+  test granted/granted, granted/denied, denied/granted, and denied/denied.
 
 ## Global reminder delivery switch
 
@@ -68,8 +77,40 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Change the device clock and verify future scheduling is rebuilt without resurrecting disabled occurrences.
 - [ ] Change the time zone and verify a 09:00 reminder remains 09:00 local time and old trigger times are replaced.
 - [ ] Deliver a stale alarm after editing, disabling, or deleting a reminder and verify it produces no notification.
-- [ ] Test battery saver/Doze and record that inexact alarms can be delayed.
+- [ ] Test battery saver/Doze and record any Android timing delay. Exact alarms
+  are preferred but are not a mathematical zero-delay guarantee.
 - [ ] Confirm notification actions remain intentionally inert until Phase 5; do not treat this as a Phase 4 failure.
+
+### Samsung / physical-device exact-alarm procedure
+
+- [ ] **A.** Grant `POST_NOTIFICATIONS` when Android requests it, or use the
+  notification-permission banner. Confirm that notifications are enabled for
+  the app.
+- [ ] **B.** Grant the app's `Alarms & reminders` special access from the
+  exact-alarm banner. Confirm that the banner disappears when the app resumes.
+- [ ] **C.** Create an enabled reminder 5-10 minutes in the future. Keep the
+  selected local date, time, and interval visible for comparison.
+- [ ] **D.** If useful, confirm an alarm is registered with:
+  `adb shell dumpsys alarm | findstr /i regular-notifications`.
+  The output is diagnostic only; do not treat its vendor-specific formatting
+  as an app contract.
+- [ ] **E.** Swipe the app away from Recents.
+- [ ] **F.** Lock the phone.
+- [ ] **G.** Do **not** reopen the app while waiting.
+- [ ] **H.** Verify that the notification arrives around the requested time,
+  then repeat with the screen on and with battery saver/Doze enabled if
+  practical. Exact alarms can still be affected by Android and Samsung timing
+  policies.
+- [ ] Repeat the procedure after revoking exact access. Verify the reminder
+  remains enabled, the special-access explanation returns, and the fallback
+  alarm still delivers. Grant access again and verify one reconciliation
+  rebuilds the exact schedule without a duplicate notification.
+- [ ] Repeat with the master switch OFF and with the individual reminder OFF;
+  neither state may deliver an alarm. Turning either state back on must rebuild
+  only the appropriate future anchored work.
+- [ ] Reboot the phone, change the time zone, and revoke/re-grant notification
+  permission separately. Verify each recovery path preserves the independent
+  permission and switch states.
 
 ## Reminder lifecycle
 
@@ -130,4 +171,4 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Close/reopen the app after process death and verify reminders remain correct.
 - [ ] Explicitly Force Stop the app from Android system settings. Verify and
   document that Android may suppress alarms/receivers until the app is opened;
-  do not treat this as an app bypass test.
+  do not treat this as the normal "app closed" test or as an app bypass test.

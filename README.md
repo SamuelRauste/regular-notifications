@@ -9,13 +9,14 @@ advertisements, or network access.
 
 ## Status
 
-Phase 4 is complete, followed by a corrective pass for global pause and
-notification-permission recovery. Enabled reminders use Room-derived, one-shot
-inexact AlarmManager scheduling, alarm delivery, startup reconciliation, and
-boot/clock/time-zone recovery. The app can create, view, edit, enable, disable,
-and permanently delete local reminders through a short Compose/Material 3
-interface. Notification action processing remains Phase 5. Android
-instrumentation tests compile but still need a usable phone or emulator to run.
+Phase 4 is complete, followed by corrective passes for global pause,
+notification-permission recovery, and exact-alarm scheduling. Enabled reminders
+use Room-derived, one-shot AlarmManager scheduling, alarm delivery, startup
+reconciliation, and boot/clock/time-zone recovery. The app can create, view,
+edit, enable, disable, and permanently delete local reminders through a short
+Compose/Material 3 interface. Notification action processing remains Phase 5.
+Android instrumentation tests compile but still need a usable phone or emulator
+to run.
 
 ## Prerequisites
 
@@ -79,15 +80,20 @@ and deleting it. The `+ Add` button opens a short form: title, optional
 description, first date/time, and `Every [X] days`. New reminders default to
 Every 1 day. Tomorrow previews are automatic for intervals of 2 or more days;
 there is no preview setting in the form. Enabled reminders are scheduled from
-Room state using one-shot inexact `AlarmManager.setAndAllowWhileIdle` alarms.
-The app reconciles alarms at startup and after reboot, clock changes, and
-time-zone changes. It does not need to remain visible, stay in Recents, keep a
-foreground service running, or show an "app is running" notification. Android
-can terminate the process and later start the alarm receiver when an alarm is
-due. Edit is the way to correct a title/description typo or change a schedule.
-Delete is permanent: confirmation removes the Room reminder/history and both
-derived alarm and visible-notification kinds. Notification action buttons
-remain inert until Phase 5.
+Room state using one-shot alarms. When Android's **Alarms & reminders** access
+is available, the scheduler uses `setExactAndAllowWhileIdle`; otherwise it
+gracefully falls back to `setAndAllowWhileIdle`. The list remains usable while
+exact access is unavailable and shows a user-initiated link to the relevant
+Settings screen. Exact-alarm access is independent of notification permission
+and the `All reminders` switch. The app reconciles alarms at startup and after
+reboot, clock changes, time-zone changes, and exact-access changes. It does not
+need to remain visible, stay in Recents, keep a foreground service running, or
+show an "app is running" notification. Android can terminate the process and
+later start the alarm receiver when an alarm is due. Edit is the way to correct
+a title/description typo or change a schedule. Delete is permanent:
+confirmation removes the Room reminder/history and both derived alarm and
+visible-notification kinds. Notification action buttons remain inert until
+Phase 5.
 
 ## Inspect Phase 3 notifications
 
@@ -118,14 +124,16 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 On Android 13 and newer, the app asks for `POST_NOTIFICATIONS` only after the
 user taps the non-blocking permission banner. Denial does not prevent reminder
 management; the banner offers Android notification settings when another
-permission prompt is no longer appropriate. If a reminder becomes due while
-permission is denied, its Room due state is retained. When permission changes
-to granted, the app performs a one-time scheduling reconciliation so that
-outstanding work can be delivered without restarting the app or changing the
-clock. Delivery depends on Android's alarm and battery-management policies. The
-scheduler uses reasonably punctual
-inexact one-shot `AlarmManager` alarms and does not request exact-alarm special
-access.
+permission prompt is no longer appropriate. On Android 12 and newer, the app
+also shows a separate user-initiated banner for `SCHEDULE_EXACT_ALARM` access.
+The two permissions are independent: granting or revoking one does not change
+the other or the global reminder switch. If exact access is denied or later
+revoked, scheduling uses the inexact fallback; when access is granted again,
+the app reconciles Room state and rebuilds exact alarms without changing
+reminder data. If a reminder becomes due while notification permission is
+denied, its Room due state is retained and a later permission reconciliation
+can deliver it. Delivery still depends on Android's alarm and battery
+management policies.
 
 Every-X-days recurrences preserve local wall-clock time across daylight-saving
 and time-zone changes. Android may delay alarms, especially in battery saver or

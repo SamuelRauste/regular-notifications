@@ -8,6 +8,8 @@ import com.samuel.regularnotifications.data.local.ReminderDatabase
 import com.samuel.regularnotifications.data.local.ReminderDatabaseProvider
 import com.samuel.regularnotifications.notifications.ReminderNotificationChannels
 import com.samuel.regularnotifications.scheduling.AlarmManagerReminderScheduler
+import com.samuel.regularnotifications.scheduling.AndroidExactAlarmCapability
+import com.samuel.regularnotifications.scheduling.ExactAlarmCapability
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -46,8 +48,14 @@ class AppContainer(context: Context) {
 
     val reminderRepository: ReminderRepository = ReminderRepository(database)
 
+    val exactAlarmCapability: ExactAlarmCapability = AndroidExactAlarmCapability(context)
+
     val reminderScheduler: AlarmManagerReminderScheduler =
-        AlarmManagerReminderScheduler(context, reminderRepository)
+        AlarmManagerReminderScheduler(
+            context = context,
+            repository = reminderRepository,
+            exactAlarmCapability = exactAlarmCapability,
+        )
 
     val reminderService: ReminderService = ReminderService(reminderRepository, reminderScheduler)
 }

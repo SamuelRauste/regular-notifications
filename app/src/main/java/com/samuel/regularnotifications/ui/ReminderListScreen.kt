@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.samuel.regularnotifications.notifications.ExactAlarmPermissionPresentation
 import com.samuel.regularnotifications.notifications.NotificationPermissionPresentation
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,6 +56,8 @@ fun ReminderListScreen(
     modifier: Modifier = Modifier,
     notificationPermission: NotificationPermissionPresentation = NotificationPermissionPresentation(),
     onNotificationPermissionAction: () -> Unit = {},
+    exactAlarmPermission: ExactAlarmPermissionPresentation = ExactAlarmPermissionPresentation(),
+    onExactAlarmPermissionAction: () -> Unit = {},
 ) {
     var pendingDeletion by remember { mutableStateOf<ReminderListItem?>(null) }
 
@@ -83,6 +86,12 @@ fun ReminderListScreen(
                 NotificationPermissionBanner(
                     presentation = notificationPermission,
                     onAction = onNotificationPermissionAction,
+                )
+            }
+            if (exactAlarmPermission.isVisible) {
+                ExactAlarmPermissionBanner(
+                    presentation = exactAlarmPermission,
+                    onAction = onExactAlarmPermissionAction,
                 )
             }
             MasterReminderControl(
@@ -295,6 +304,35 @@ private fun ErrorBanner(
 @Composable
 private fun NotificationPermissionBanner(
     presentation: NotificationPermissionPresentation,
+    onAction: () -> Unit,
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(presentation.message, style = MaterialTheme.typography.bodyMedium)
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier.align(Alignment.End),
+            ) {
+                Text(presentation.actionLabel)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExactAlarmPermissionBanner(
+    presentation: ExactAlarmPermissionPresentation,
     onAction: () -> Unit,
 ) {
     Card(

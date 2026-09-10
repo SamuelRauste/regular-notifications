@@ -9,6 +9,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.samuel.regularnotifications.AppContainer
+import com.samuel.regularnotifications.notifications.rememberExactAlarmPermissionController
 import com.samuel.regularnotifications.notifications.rememberNotificationPermissionController
 
 private const val ReminderListRoute = "reminders"
@@ -33,6 +34,10 @@ fun RegularNotificationsApp(
             val notificationPermission = rememberNotificationPermissionController(
                 onPermissionGranted = viewModel::onNotificationPermissionGranted,
             )
+            val exactAlarmPermission = rememberExactAlarmPermissionController(
+                exactAlarmCapability = appContainer.exactAlarmCapability,
+                onCapabilityChanged = viewModel::onExactAlarmCapabilityChanged,
+            )
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
             ReminderListScreen(
@@ -50,6 +55,8 @@ fun RegularNotificationsApp(
                 onDismissError = viewModel::clearError,
                 notificationPermission = notificationPermission.presentation,
                 onNotificationPermissionAction = notificationPermission.onAction,
+                exactAlarmPermission = exactAlarmPermission.presentation,
+                onExactAlarmPermissionAction = exactAlarmPermission.onAction,
             )
         }
         composable(ReminderEditorRoute) { backStackEntry ->

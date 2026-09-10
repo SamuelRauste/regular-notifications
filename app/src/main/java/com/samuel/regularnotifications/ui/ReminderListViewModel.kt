@@ -76,6 +76,10 @@ class ReminderListViewModel(
         refreshDerivedSchedule()
     }
 
+    fun onExactAlarmCapabilityChanged() {
+        refreshDerivedSchedule()
+    }
+
     fun retry() {
         _uiState.update { it.copy(errorMessage = null) }
         refreshDerivedSchedule()

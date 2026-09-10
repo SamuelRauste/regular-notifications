@@ -11,10 +11,12 @@ import com.samuel.regularnotifications.notifications.ReminderNotificationManager
 import java.time.Instant
 import java.time.ZoneId
 
-/** One-shot, inexact AlarmManager implementation backed by Room snapshots. */
+/** One-shot AlarmManager implementation backed by Room snapshots. */
 class AlarmManagerReminderScheduler(
     context: Context,
     private val repository: ReminderRepository,
+    private val exactAlarmCapability: ExactAlarmCapability =
+        AndroidExactAlarmCapability(context),
     private val notificationManager: ReminderNotificationManager =
         ReminderNotificationManager(context.applicationContext),
 ) : ReminderScheduler {
@@ -181,11 +183,57 @@ class AlarmManagerReminderScheduler(
             kind = kind,
             expectedRevision = expectedRevision,
         )
-        alarmManager.setAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            triggerAtEpochMillis,
-            pendingIntent,
+        val mode = AlarmSchedulePolicy.select(
+            exactAlarmCapability.canScheduleExactAlarms(),
         )
+        try {
+            when (mode) {
+                AlarmScheduleMode.EXACT -> alarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtEpochMillis,
+                    pendingIntent,
+                )
+
+                AlarmScheduleMode.INEXACT -> alarmManager.setAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtEpochMillis,
+                    pendingIntent,
+                )
+            }
+        } catch (error: SecurityException) {
+            if (mode == AlarmScheduleMode.EXACT) {
+                // Permission can be revoked between canScheduleExactAlarms() and
+                // setExactAndAllowWhileIdle(). The same PendingIntent identity
+                // makes this fallback replace the failed exact attempt safely.
+                Log.w(
+                    TAG,
+                    "Exact alarm access changed; using inexact fallback for " +
+                        "reminderId=$reminderId kind=$kind",
+                    error,
+                )
+                try {
+                    alarmManager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        triggerAtEpochMillis,
+                        pendingIntent,
+                    )
+                } catch (fallbackError: SecurityException) {
+                    Log.e(
+                        TAG,
+                        "Unable to schedule fallback alarm for " +
+                            "reminderId=$reminderId kind=$kind",
+                        fallbackError,
+                    )
+                }
+            } else {
+                Log.e(
+                    TAG,
+                    "Unable to schedule inexact alarm for " +
+                        "reminderId=$reminderId kind=$kind",
+                    error,
+                )
+            }
+        }
     }
 
     private fun postNotification(

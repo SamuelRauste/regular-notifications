@@ -46,7 +46,7 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 4 — Alarm scheduling and delivery
 
-- [x] Define `ReminderScheduler` and implement one-shot inexact `AlarmManager` scheduling for applicable `DUE` and `TOMORROW` states.
+- [x] Define `ReminderScheduler` and implement one-shot `AlarmManager` scheduling for applicable `DUE` and `TOMORROW` states.
 - [x] Use stable `(reminderId, notification kind)` identities in unique immutable `PendingIntent`s and notification IDs.
 - [x] Implement alarm delivery receiver and database-backed next-occurrence reconciliation.
 - [x] Make scheduling/cancellation idempotent and safe when a reminder was deleted before delivery; never schedule Tomorrow for every-1-day reminders.
@@ -86,6 +86,21 @@ are marked complete only after the relevant checks have been run.
 - [x] Add JVM and AndroidX coverage for master persistence, four effective-state
   combinations, global pause/resume, permission transitions, and UI semantics.
 
+## Exact-alarm corrective pass after Phase 4/global pause
+
+- [x] Declare `SCHEDULE_EXACT_ALARM` and use `setExactAndAllowWhileIdle` for
+  DUE and TOMORROW when Android grants exact-alarm access.
+- [x] Fall back to `setAndAllowWhileIdle` when exact access is unavailable,
+  including a safe fallback for a permission race, without changing Room state.
+- [x] Add a non-blocking, user-initiated Alarms & reminders banner and refresh
+  capability on lifecycle resume.
+- [x] Reconcile after the exact-alarm grant broadcast, and after revocation via
+  startup, resume, recovery, and CRUD without changing master or individual switches.
+- [x] Add exact/inexact policy, permission-intent, and recovery tests without
+  implementing Phase 5 notification actions.
+- [x] Update the README, architecture, and physical-device checklist for exact
+  alarms, fallback behavior, independent permissions, and timing limitations.
+
 ## Phase 6 — Recovery and history
 
 - [ ] Extend the Phase 4 lightweight boot/time/time-zone recovery with the remaining recovery/history behavior and physical-device validation.
@@ -113,7 +128,10 @@ are marked complete only after the relevant checks have been run.
 - Single application module; no backend, network permission, DI framework, or WorkManager primary timer.
 - Room is the source of truth; alarms are derived state and are reconstructed after recovery events.
 - Minimum SDK target is 26 unless the installed toolchain gives a strong reason to change it.
-- Inexact one-shot alarms are the initial timing mechanism; exact-alarm access is intentionally not requested.
+- One-shot alarms are derived from Room state. Exact alarms are preferred when
+  `SCHEDULE_EXACT_ALARM` access is available; `setAndAllowWhileIdle` is the
+  graceful fallback when it is unavailable. Exact access is independent of
+  notification permission and the global master switch.
 - Phase 0 scaffold uses compileSdk/targetSdk 37, Android Gradle Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin/Compose compiler plugin 2.3.21, and Compose BOM 2026.08.00.
 - The newer Android CLI is useful and preferred for agent-driven workflows. Modern `sdkmanager` from the Android SDK Command-Line Tools package remains documented and supported for installing SDK packages; a deprecation warning may refer to the legacy SDK Tools package or an older `sdkmanager` earlier on PATH.
 - Every-X-days schedules use the device's current time zone and preserve the original local calendar anchor and wall-clock time.
@@ -126,7 +144,7 @@ are marked complete only after the relevant checks have been run.
 - NotificationManager identity is `(tag containing full reminder ID and kind, stable small kind ID)`, so notification tags prevent 64-bit-to-32-bit ID collisions. Action PendingIntents carry reminder ID, kind, action, and expected revision, use stable data/request identity, and are immutable.
 - `POST_NOTIFICATIONS` is requested only after the user taps the permission banner on Android 13+; denied permission leaves CRUD usable and can link to app notification settings. The debug-only adb receiver exercises notifications before Phase 4.
 - Phase 3 does not schedule alarms or mutate Room from notification actions. AlarmManager delivery is Phase 4; Done, Dismiss, +1 day, Seen, and swipe-action processing are Phase 5.
-- Phase 4 uses `AlarmManager.setAndAllowWhileIdle(RTC_WAKEUP, ...)` for one-shot inexact alarms. It deliberately requests no exact-alarm permission and does not use WorkManager as the primary timer.
+- The exact-alarm corrective pass uses `AlarmManager.setExactAndAllowWhileIdle(RTC_WAKEUP, ...)` for both DUE and TOMORROW when permitted, and `setAndAllowWhileIdle(RTC_WAKEUP, ...)` otherwise. It uses `SCHEDULE_EXACT_ALARM`, not `USE_EXACT_ALARM`, and does not use WorkManager as the primary timer.
 - `ReminderService` coordinates CRUD with `ReminderScheduler`; the repository stays Android-free. The application container owns one scheduler and one Room repository, and startup plus narrow boot/time/time-zone receivers reconcile all rows.
 - Alarm PendingIntent data contains the full reminder ID and notification kind. The integer request-code hash is not the sole identity. Alarm delivery re-reconciles Room state and accepts only current expected revisions; a DUE seed revision of zero is used only for the future next-normal alarm.
 - Valid alarm delivery posts through the Phase 3 notification manager and does not immediately recreate the delivered one-shot alarm. A later reconciliation can safely rebuild it from Room if the visible notification is lost.
@@ -160,6 +178,11 @@ are marked complete only after the relevant checks have been run.
 - Denied notification permission retains Room outstanding state. A denied to
   granted transition triggers one reconciliation; permission and the master
   switch never silently change one another.
+- Exact-alarm access is independently user controlled. Granting or revoking it
+  never changes notification permission, master pause, or individual reminder
+  enabled state. Permission-state broadcasts and lifecycle resume re-check the
+  capability and rebuild the Room-derived schedule; Android Force Stop remains
+  an explicit platform limitation.
 
 ## Phase 1, Phase 2, Phase 3, and Phase 4 verification note
 
@@ -186,3 +209,10 @@ device or emulator is available. Physical testing remains required for
 permission-granted recovery, global pause/resume across process death and
 reboot, visible notification cancellation, lock-screen delivery, battery
 saver/Doze behavior, and vendor-specific background policies.
+
+The exact-alarm corrective pass passed `test`, `lint`, `assembleDebug`, and
+`assembleAndroidTest`. Connected instrumentation was not run because no usable
+device or emulator is available. Physical testing remains required for exact
+access grant/revocation fallback behavior, Samsung timing, lock-screen delivery,
+battery saver/Doze behavior, reboot, time-zone changes, and vendor-specific
+background policies.

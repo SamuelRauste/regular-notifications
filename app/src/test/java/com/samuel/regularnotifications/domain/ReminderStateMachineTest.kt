@@ -98,18 +98,21 @@ class ReminderStateMachineTest {
     }
 
     @Test
-    fun repeatedPostponementOnlyMovesTheDisplayedOccurrence() {
-        val definition = definition(LocalDateTime.of(2026, 1, 1, 9, 0))
-        val initial = ReminderStateMachine.initial(definition, instant("2026-01-01T10:00:00Z"), utc)
+    fun repeatedPostponementKeepsTheDueWallClockAndCanonicalSchedule() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 5, 8, 0),
+            intervalDays = 7,
+        )
+        val initial = ReminderStateMachine.initial(definition, instant("2026-01-05T10:00:00Z"), utc)
 
         val firstPostponement = ReminderStateMachine.postpone(
             initial,
-            now = instant("2026-01-01T10:00:00Z"),
+            now = instant("2026-01-05T22:00:00Z"),
             zoneId = utc,
         )
         val secondPostponement = ReminderStateMachine.postpone(
             firstPostponement,
-            now = instant("2026-01-01T11:00:00Z"),
+            now = instant("2026-01-06T12:00:00Z"),
             zoneId = utc,
         )
         val initialDue = checkNotNull(initial.outstandingDue)
@@ -117,12 +120,32 @@ class ReminderStateMachineTest {
         val secondDue = checkNotNull(secondPostponement.outstandingDue)
 
         assertEquals(initial.nextNormal, firstPostponement.nextNormal)
+        assertEquals(initial.nextNormal, secondPostponement.nextNormal)
         assertEquals(initialDue.normalOccurrenceIndex, firstDue.normalOccurrenceIndex)
-        assertEquals(instant("2026-01-02T10:00:00Z").toEpochMilli(), firstDue.dueAtEpochMillis)
-        assertEquals(instant("2026-01-03T10:00:00Z").toEpochMilli(), secondDue.dueAtEpochMillis)
+        assertEquals(initialDue.normalOccurrenceIndex, secondDue.normalOccurrenceIndex)
+        assertEquals(instant("2026-01-06T08:00:00Z").toEpochMilli(), firstDue.dueAtEpochMillis)
+        assertEquals(instant("2026-01-07T08:00:00Z").toEpochMilli(), secondDue.dueAtEpochMillis)
+        assertEquals(1, firstDue.postponementCount)
         assertEquals(2, secondDue.postponementCount)
-        assertEquals(definition.anchorLocalDate, LocalDateTime.of(2026, 1, 1, 9, 0).toLocalDate())
-        assertNotEquals(initialDue.revision, secondDue.revision)
+        assertEquals(initialDue.revision + 1, firstDue.revision)
+        assertEquals(firstDue.revision + 1, secondDue.revision)
+        assertEquals(LocalDateTime.of(2026, 1, 5, 8, 0).toLocalDate(), definition.anchorLocalDate)
+        assertEquals(LocalDateTime.of(2026, 1, 5, 8, 0).toLocalTime(), definition.anchorLocalTime)
+    }
+
+    @Test
+    fun postponingAnOverdueOccurrenceUsesTheNextLocalDateAtItsDueClockTime() {
+        val definition = definition(
+            anchor = LocalDateTime.of(2026, 1, 5, 8, 0),
+            intervalDays = 7,
+        )
+        val initial = ReminderStateMachine.initial(definition, instant("2026-01-05T10:00:00Z"), utc)
+        val pressedAt = instant("2026-01-06T23:30:00Z")
+
+        val postponed = ReminderStateMachine.postpone(initial, pressedAt, utc)
+
+        assertEquals(instant("2026-01-07T08:00:00Z").toEpochMilli(), postponed.outstandingDue?.dueAtEpochMillis)
+        assertTrue(Instant.ofEpochMilli(checkNotNull(postponed.outstandingDue).dueAtEpochMillis) > pressedAt)
     }
 
     @Test

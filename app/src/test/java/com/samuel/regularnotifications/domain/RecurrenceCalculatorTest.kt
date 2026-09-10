@@ -155,13 +155,48 @@ class RecurrenceCalculatorTest {
     }
 
     @Test
-    fun calendarDayPostponementPreservesLocalTimeAcrossSpringDst() {
-        val beforeDst = LocalDateTime.of(2026, 3, 28, 9, 0).atZone(helsinki).toInstant()
+    fun postponementUsesDueClockRatherThanActionClock() {
+        val dueAt = LocalDateTime.of(2026, 1, 5, 20, 0).atZone(utc).toInstant()
+        val pressedAt = LocalDateTime.of(2026, 1, 5, 20, 15).atZone(utc).toInstant()
 
-        val postponed = RecurrenceCalculator.plusCalendarDays(beforeDst, 1, helsinki)
+        val postponed = RecurrenceCalculator.tomorrowAtDueWallClock(dueAt, pressedAt, utc)
+
+        assertEquals(LocalDateTime.of(2026, 1, 6, 20, 0), postponed.atZone(utc).toLocalDateTime())
+        assertTrue(postponed > pressedAt)
+    }
+
+    @Test
+    fun lateSameDayPostponementKeepsTheDueClockTime() {
+        val dueAt = LocalDateTime.of(2026, 1, 5, 8, 0).atZone(utc).toInstant()
+        val pressedAt = LocalDateTime.of(2026, 1, 5, 23, 30).atZone(utc).toInstant()
+
+        val postponed = RecurrenceCalculator.tomorrowAtDueWallClock(dueAt, pressedAt, utc)
+
+        assertEquals(LocalDateTime.of(2026, 1, 6, 8, 0), postponed.atZone(utc).toLocalDateTime())
+        assertTrue(postponed > pressedAt)
+    }
+
+    @Test
+    fun overduePostponementUsesTheNextCalendarDateAfterTheAction() {
+        val dueAt = LocalDateTime.of(2026, 1, 5, 8, 0).atZone(utc).toInstant()
+        val pressedAt = LocalDateTime.of(2026, 1, 6, 23, 30).atZone(utc).toInstant()
+
+        val postponed = RecurrenceCalculator.tomorrowAtDueWallClock(dueAt, pressedAt, utc)
+
+        assertEquals(LocalDateTime.of(2026, 1, 7, 8, 0), postponed.atZone(utc).toLocalDateTime())
+        assertTrue(postponed > pressedAt)
+    }
+
+    @Test
+    fun postponementPreservesTheDueClockAcrossSpringDstWithoutFixed24Hours() {
+        val dueAt = LocalDateTime.of(2026, 3, 28, 9, 0).atZone(helsinki).toInstant()
+        val pressedAt = LocalDateTime.of(2026, 3, 28, 22, 0).atZone(helsinki).toInstant()
+
+        val postponed = RecurrenceCalculator.tomorrowAtDueWallClock(dueAt, pressedAt, helsinki)
 
         assertEquals(LocalDateTime.of(2026, 3, 29, 9, 0), postponed.atZone(helsinki).toLocalDateTime())
-        assertTrue(postponed > beforeDst)
+        assertEquals(Duration.ofHours(23), Duration.between(dueAt, postponed))
+        assertTrue(postponed > pressedAt)
     }
 
     private fun definition(anchor: LocalDateTime, intervalDays: Int): ReminderDefinition = ReminderDefinition(

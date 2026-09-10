@@ -120,10 +120,9 @@ object ReminderStateMachine {
         zoneId: ZoneId,
     ): ReminderScheduleState {
         val due = requireNotNull(current.outstandingDue) { "There is no outstanding occurrence to postpone." }
-        val baseEpochMillis = max(due.dueAtEpochMillis, now.toEpochMilli())
-        val postponedUntil = RecurrenceCalculator.plusCalendarDays(
-            instant = Instant.ofEpochMilli(baseEpochMillis),
-            days = 1,
+        val postponedUntil = RecurrenceCalculator.tomorrowAtDueWallClock(
+            dueAt = Instant.ofEpochMilli(due.dueAtEpochMillis),
+            now = now,
             zoneId = zoneId,
         ).toEpochMilli()
         return current.copy(

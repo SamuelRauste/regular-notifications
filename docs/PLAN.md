@@ -95,6 +95,16 @@ Implementation notes for this phase:
   timestamp after every edit.
 - [x] Add focused repository/service tests and update edit/manual-test docs.
 
+## Corrective pass after Phase 5 — +1 day wall-clock semantics
+
+- [x] Define `+1 day` as tomorrow at the current effective DUE occurrence's
+  local wall-clock time, using the action's local calendar date rather than its
+  time of day.
+- [x] Preserve the recurrence anchor, normal next occurrence, action revision,
+  stale-action protection, and one-event-per-successful-postponement behavior.
+- [x] Cover late same-day, overdue, repeated, persistence, and DST cases with
+  focused tests and update user-facing/manual documentation.
+
 ## Corrective/product pass between Phase 4 and Phase 5
 
 - [x] Persist one global `masterEnabled` reminder-delivery setting in Room
@@ -168,6 +178,10 @@ Implementation notes for this phase:
 - The newer Android CLI is useful and preferred for agent-driven workflows. Modern `sdkmanager` from the Android SDK Command-Line Tools package remains documented and supported for installing SDK packages; a deprecation warning may refer to the legacy SDK Tools package or an older `sdkmanager` earlier on PATH.
 - Every-X-days schedules use the device's current time zone and preserve the original local calendar anchor and wall-clock time.
 - There is one persisted outstanding due state and one persisted Tomorrow preview state per reminder. Normal recurrence remains canonical; postponed state is auxiliary and can be collapsed when a newer normal occurrence becomes due.
+- `+1 day` uses the active zone's next local calendar date and the current
+  effective DUE occurrence's local wall-clock time. A late action therefore
+  never shifts tomorrow's reminder to the action time or uses fixed 24-hour
+  arithmetic; it only changes the outstanding occurrence.
 - The reminder stores one resolved/skipped normal-occurrence cursor so Done/Dismiss cannot recreate resolved occurrences and disabled-period occurrences cannot reappear after recovery or a time-zone change; this cursor does not alter the recurrence anchor and does not create history for skipped occurrences.
 - Metadata-only edits (title/description with unchanged enabled state and
   schedule fields) preserve the resolved/skipped cursor and any logically
@@ -276,3 +290,8 @@ process could not create its Android user directory. Physical testing remains
 required for visible-notification replacement after metadata edits, old-action
 rejection after edits, replacement-schedule alarm cancellation, and paused
 editing on a real device.
+
+The post-Phase-5 `+1 day` wall-clock corrective pass passed `test`, `lint`,
+`assembleDebug`, and `assembleAndroidTest`. Physical testing remains required
+for late, repeated, overdue, and daylight-saving postponement behavior on a
+real device.

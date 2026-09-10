@@ -93,6 +93,86 @@ class ReminderRepositoryTest {
     }
 
     @Test
+    fun postponeKeepsTheCanonicalScheduleAndRecordsOneWallClockBasedEvent() = runBlocking {
+        val createdAt = Instant.parse("2026-01-05T10:00:00Z")
+        val pressedAt = Instant.parse("2026-01-05T23:00:00Z")
+        val secondPressedAt = Instant.parse("2026-01-06T12:00:00Z")
+        val reminderId = repository.createReminder(
+            input().copy(
+                firstOccurrence = LocalDateTime.of(2026, 1, 5, 8, 0),
+                intervalDays = 7,
+            ),
+            utc,
+            createdAt,
+        )
+        val before = database.reminderDao().getById(reminderId)!!
+        val due = database.outstandingDueDao().getByReminderId(reminderId)!!
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.postpone(
+                id = reminderId,
+                expectedRevision = due.revision,
+                expectedNormalOccurrenceIndex = due.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = pressedAt,
+            ),
+        )
+
+        val postponed = database.outstandingDueDao().getByReminderId(reminderId)!!
+        val after = database.reminderDao().getById(reminderId)!!
+        assertEquals(Instant.parse("2026-01-06T08:00:00Z").toEpochMilli(), postponed.dueAtEpochMillis)
+        assertEquals(postponed.dueAtEpochMillis, postponed.postponedUntilEpochMillis)
+        assertEquals(1, postponed.postponementCount)
+        assertEquals(due.revision + 1, postponed.revision)
+        assertEquals(before.anchorLocalDate, after.anchorLocalDate)
+        assertEquals(before.anchorLocalTime, after.anchorLocalTime)
+        assertEquals(before.intervalDays, after.intervalDays)
+        assertEquals(before.nextNormalOccurrenceIndex, after.nextNormalOccurrenceIndex)
+        assertEquals(before.nextNormalOccurrenceEpochMillis, after.nextNormalOccurrenceEpochMillis)
+
+        val events = database.reminderEventDao().getForReminder(reminderId)
+        assertEquals(listOf("POSTPONED"), events.map { it.action })
+        assertEquals(due.dueAtEpochMillis, events.single().dueAtEpochMillis)
+        assertEquals(postponed.dueAtEpochMillis, events.single().postponedUntilEpochMillis)
+
+        assertEquals(
+            RepositoryActionResult.STALE_REVISION,
+            repository.postpone(
+                id = reminderId,
+                expectedRevision = due.revision,
+                expectedNormalOccurrenceIndex = due.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = pressedAt,
+            ),
+        )
+        assertEquals(postponed, database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(listOf("POSTPONED"), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.postpone(
+                id = reminderId,
+                expectedRevision = postponed.revision,
+                expectedNormalOccurrenceIndex = postponed.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = secondPressedAt,
+            ),
+        )
+        val postponedTwice = database.outstandingDueDao().getByReminderId(reminderId)!!
+        assertEquals(Instant.parse("2026-01-07T08:00:00Z").toEpochMilli(), postponedTwice.dueAtEpochMillis)
+        assertEquals(2, postponedTwice.postponementCount)
+        assertEquals(due.revision + 2, postponedTwice.revision)
+        val eventsAfterSecondPostponement = database.reminderEventDao().getForReminder(reminderId)
+        assertEquals(listOf("POSTPONED", "POSTPONED"), eventsAfterSecondPostponement.map { it.action })
+        assertEquals(postponed.dueAtEpochMillis, eventsAfterSecondPostponement.first().dueAtEpochMillis)
+        assertEquals(postponedTwice.dueAtEpochMillis, eventsAfterSecondPostponement.first().postponedUntilEpochMillis)
+    }
+
+    @Test
     fun doneRecordsOneEventAdvancesCursorAndPreservesTheAnchor() = runBlocking {
         val reminderId = repository.createReminder(
             input().copy(intervalDays = 7),

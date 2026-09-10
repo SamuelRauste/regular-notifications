@@ -51,10 +51,12 @@ Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin, and Jetpack Compose Material 3.
 
 The reminder model treats the normal recurrence as canonical. Every reminder
 uses an original local date/time anchor and a positive interval in days, such
-as **Every 7 days**. A displayed occurrence can be postponed by one calendar
-day without changing that anchor or normal future schedule. There is at most
-one unresolved due state and one Tomorrow preview per reminder. Every 1 day
-does not create a Tomorrow preview; every 2 or more days can. A preview remains
+as **Every 7 days**. `+1 day` means **tomorrow at the same local wall-clock time
+as the current DUE occurrence**: it uses the date when the action is pressed,
+not the button-press time of day. It changes only that displayed occurrence,
+without changing the anchor or normal future schedule. There is at most one
+unresolved due state and one Tomorrow preview per reminder. Every 1 day does
+not create a Tomorrow preview; every 2 or more days can. A preview remains
 acknowledgeable after its delivery time until its actual reminder becomes due.
 All reminders follow the device's current local time zone.
 

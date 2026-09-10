@@ -85,8 +85,30 @@ object RecurrenceCalculator {
         return previewLocal.atZone(zoneId).toInstant()
     }
 
-    fun plusCalendarDays(instant: Instant, days: Long, zoneId: ZoneId): Instant =
-        instant.atZone(zoneId).plusDays(days).toInstant()
+    /**
+     * Schedules a postponed occurrence for the next local calendar date after
+     * [now], retaining the effective due occurrence's local clock time. The
+     * local-date-time conversion intentionally uses the same `atZone` gap and
+     * overlap conventions as normal recurrence calculation.
+     */
+    fun tomorrowAtDueWallClock(
+        dueAt: Instant,
+        now: Instant,
+        zoneId: ZoneId,
+    ): Instant {
+        val dueClockTime = dueAt.atZone(zoneId).toLocalTime()
+        var targetDate = now.atZone(zoneId).toLocalDate().plusDays(1)
+        var target = targetDate.atTime(dueClockTime).atZone(zoneId).toInstant()
+
+        // A next local date should always be later than now. Keep the invariant
+        // explicit for unusual zone-rule transitions that could adjust a local
+        // date/time while resolving a gap.
+        while (!target.isAfter(now)) {
+            targetDate = targetDate.plusDays(1)
+            target = targetDate.atTime(dueClockTime).atZone(zoneId).toInstant()
+        }
+        return target
+    }
 
     private fun Long.checkedMultiplyByTwo(): Long {
         require(this <= Long.MAX_VALUE / 2) { "Occurrence index exceeded the supported range." }

@@ -131,12 +131,17 @@ delivery.
   disappears, exactly one `DISMISSED` event is recorded, and the normal
   recurrence continues.
 - [ ] Press `+1 day`. Verify the notification disappears and exactly one
-  `POSTPONED` event is recorded. Verify the displayed occurrence is moved one
-  calendar day only; the recurrence anchor, interval, and normal next
-  occurrence do not move.
+  `POSTPONED` event is recorded. Verify it moves the displayed occurrence to
+  tomorrow at the same local wall-clock time as the current DUE occurrence, rather
+  than the time the button was pressed; the recurrence anchor, interval, and
+  normal next occurrence do not move.
 - [ ] Repeat `+1 day` on the same visible occurrence and verify it updates one
   postponed due state rather than creating duplicate notifications or events
   for a new normal occurrence.
+- [ ] For an 08:00 DUE notification, press `+1 day` late in the evening and
+  verify the replacement is at 08:00 tomorrow. Leave an 08:00 occurrence
+  outstanding until the next evening, then press `+1 day`; verify the target is
+  08:00 on the following day, never a past time.
 - [ ] On an eligible Every 2+ days reminder, verify the TOMORROW notification
   has only `Seen`. Press `Seen` and verify the preview disappears, one
   `TOMORROW_SEEN` event is recorded, and no actual DUE occurrence is marked
@@ -203,7 +208,9 @@ delivery.
 - [ ] Verify that a reminder has at most one outstanding actionable due notification.
 - [ ] Verify that repeated recovery after downtime does not create duplicate due notifications.
 - [ ] Verify that missed occurrences collapse to one due state per reminder.
-- [ ] Verify that +1 day changes only the outstanding occurrence and leaves the normal recurrence anchor unchanged.
+- [ ] Verify that +1 day changes only the outstanding occurrence, uses tomorrow
+  at that occurrence's local wall-clock time, and leaves the normal recurrence
+  anchor unchanged.
 - [ ] Verify repeated +1 day actions update one postponement rather than creating additional due states.
 - [ ] Verify a newer normal occurrence collapses an older/postponed due state into one outstanding due state.
 - [ ] Verify event history records Done, Dismiss, +1 day, and Tomorrow Seen independently of the recurrence definition.
@@ -218,7 +225,9 @@ delivery.
 - [ ] Trigger multiple simultaneous reminders and verify each remains independent.
 - [ ] Verify Done removes the notification, records completion, and preserves recurrence.
 - [ ] Verify Dismiss removes the notification, records dismissal, and preserves recurrence.
-- [ ] Verify “+1 day” removes the notification, postpones only that displayed occurrence, and leaves the recurrence anchor and normal schedule unchanged.
+- [ ] Verify “+1 day” removes the notification, postpones only that displayed
+  occurrence to tomorrow at its local wall-clock time, and leaves the recurrence
+  anchor and normal schedule unchanged.
 - [ ] Verify the Tomorrow preview says “Tomorrow: …”, has only one `Seen` action, and does not count as Done or Dismiss.
 - [ ] Deliver a Tomorrow notification slightly late, then press Seen; verify it is still acknowledged and records exactly one `TOMORROW_SEEN` event.
 - [ ] Verify acknowledging a Tomorrow preview prevents it from returning after process death, reboot, or rescheduling.

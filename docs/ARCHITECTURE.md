@@ -77,10 +77,13 @@ cursor advances to the latest due logical occurrence and the next future
 occurrence is calculated from the original anchor. The skipped occurrences do
 not create Done, Dismiss, or other history events.
 
-The “+1 day” action postpones only the displayed occurrence. It does not change
-the reminder's recurrence anchor or normal recurring schedule. Done and Dismiss
-record an event and continue the normal schedule. Notification swipe dismissal
-will map to Dismiss only where Android exposes that reliably.
+The “+1 day” action postpones only the displayed occurrence. It means tomorrow
+at the same local wall-clock time as the current effective DUE occurrence: it
+uses the action's current local date, not the time of day when the button was
+pressed. It does not change the reminder's recurrence anchor or normal recurring
+schedule. Done and Dismiss record an event and continue the normal schedule.
+Notification swipe dismissal will map to Dismiss only where Android exposes that
+reliably.
 
 Every-X-days recurrences are local wall-clock schedules. They store a local
 anchor date/time and recalculate in the device's current `ZoneId`, so a 09:00
@@ -138,8 +141,9 @@ dropped, and the single due notification remains.
 
 Repeated +1 day actions update the same due row and increment its revision; they
 never create another due row or move the normal pointer. The postponed time is
-calculated in the current local zone using a calendar-day advance, based on the
-currently displayed due time (or now when an overdue state is being postponed).
+calculated in the current local zone from the next local calendar date after the
+action and the current effective DUE wall-clock time. It never takes its clock
+time from a late button press, and is always kept in the future.
 Resolving the due state removes that row, records the action, and advances only
 the resolved/skipped occurrence cursor; the normal pointer remains the
 canonical first future occurrence. Disabling also removes due and preview rows

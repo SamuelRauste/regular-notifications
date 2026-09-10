@@ -57,7 +57,9 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Show a TOMORROW notification with `--ei intervalDays 7` and verify its title starts `Tomorrow:`, with only the `Seen` action.
 - [ ] Run the TOMORROW command with `--ei intervalDays 1` and verify no Tomorrow notification is posted.
 - [ ] Verify DUE and TOMORROW notifications for reminder ID 42 can coexist and can be cancelled independently with the documented CANCEL commands.
-- [ ] Tap a Phase 3 action and verify it is intentionally inert; final Done, Dismiss, +1 day, and Seen behavior is deferred to Phase 5.
+- [ ] Tap a Phase 3 debug notification action only to confirm that the debug
+  presentation path is not an end-to-end Room reminder test. Test real action
+  behavior with a reminder created in the app in the Phase 5 section below.
 - [ ] Remember that these commands inspect presentation only; normal app AlarmManager delivery is covered in the Phase 4 section below.
 
 ## Phase 4 alarm scheduling and delivery
@@ -79,7 +81,8 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Deliver a stale alarm after editing, disabling, or deleting a reminder and verify it produces no notification.
 - [ ] Test battery saver/Doze and record any Android timing delay. Exact alarms
   are preferred but are not a mathematical zero-delay guarantee.
-- [ ] Confirm notification actions remain intentionally inert until Phase 5; do not treat this as a Phase 4 failure.
+- [ ] Confirm the real app notification actions are handled by the Phase 5
+  action processor; the debug receiver remains presentation-only.
 
 ### Samsung / physical-device exact-alarm procedure
 
@@ -111,6 +114,48 @@ a real notification or reboot should be run on a physical Android phone.
 - [ ] Reboot the phone, change the time zone, and revoke/re-grant notification
   permission separately. Verify each recovery path preserves the independent
   permission and switch states.
+
+## Phase 5 notification actions
+
+Use reminders created in the app, not the presentation-only debug receiver.
+For repeatable tests, choose a short interval and a first occurrence a few
+minutes ahead. Confirm notification permission is granted before testing
+delivery.
+
+- [ ] With the app open, verify a DUE notification has exactly `Done`,
+  `Dismiss`, and `+1 day`.
+- [ ] Press `Done`. Verify the notification disappears, exactly one `DONE`
+  event is recorded, the reminder remains enabled, and its next normal
+  occurrence is still scheduled.
+- [ ] Press `Dismiss` on another occurrence. Verify the notification
+  disappears, exactly one `DISMISSED` event is recorded, and the normal
+  recurrence continues.
+- [ ] Press `+1 day`. Verify the notification disappears and exactly one
+  `POSTPONED` event is recorded. Verify the displayed occurrence is moved one
+  calendar day only; the recurrence anchor, interval, and normal next
+  occurrence do not move.
+- [ ] Repeat `+1 day` on the same visible occurrence and verify it updates one
+  postponed due state rather than creating duplicate notifications or events
+  for a new normal occurrence.
+- [ ] On an eligible Every 2+ days reminder, verify the TOMORROW notification
+  has only `Seen`. Press `Seen` and verify the preview disappears, one
+  `TOMORROW_SEEN` event is recorded, and no actual DUE occurrence is marked
+  complete or dismissed.
+- [ ] Swipe a DUE notification away and verify it has the same recorded
+  meaning as `Dismiss`. Swipe a TOMORROW notification away and verify it has
+  the same recorded meaning as `Seen`.
+- [ ] Test every action with the app open, closed, removed from Recents, and
+  while the screen is locked. Confirm each reminder's notification and state
+  remain independent when multiple reminders are due together.
+- [ ] Edit a reminder after its notification is shown, then press the old
+  action. Verify the old action is ignored as stale and does not cancel or
+  mutate the current edited reminder state.
+- [ ] Deliver or repeat an old action after the same notification was already
+  handled. Verify no duplicate event is recorded and the current notification
+  is not cancelled incorrectly.
+- [ ] Delete a reminder while its notification is visible, then use any old
+  action if Android still exposes it. Verify no reminder or event is
+  recreated and all associated alarms/notifications remain cancelled.
 
 ## Reminder lifecycle
 

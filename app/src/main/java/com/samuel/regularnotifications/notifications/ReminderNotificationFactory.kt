@@ -12,6 +12,8 @@ data class ReminderNotificationInput(
     val description: String?,
     val intervalDays: Int,
     val expectedRevision: Long,
+    val normalOccurrenceIndex: Long = 0,
+    val reminderModifiedAtEpochMillis: Long = 0,
 )
 
 class ReminderNotificationFactory(
@@ -39,6 +41,13 @@ class ReminderNotificationFactory(
                     context = applicationContext,
                     reminderId = input.reminderId,
                     kind = NotificationKind.DUE,
+                ),
+            )
+            .setDeleteIntent(
+                deleteIntent(
+                    input = input,
+                    kind = NotificationKind.DUE,
+                    action = NotificationAction.DISMISS,
                 ),
             )
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -89,6 +98,13 @@ class ReminderNotificationFactory(
                     kind = NotificationKind.TOMORROW,
                 ),
             )
+            .setDeleteIntent(
+                deleteIntent(
+                    input = input,
+                    kind = NotificationKind.TOMORROW,
+                    action = NotificationAction.TOMORROW_SEEN,
+                ),
+            )
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setOnlyAlertOnce(true)
@@ -118,8 +134,24 @@ class ReminderNotificationFactory(
             notificationKind = kind,
             action = action,
             expectedRevision = input.expectedRevision,
+            expectedNormalOccurrenceIndex = input.normalOccurrenceIndex,
+            expectedReminderModifiedAtEpochMillis = input.reminderModifiedAtEpochMillis,
         ),
     ).build()
+
+    private fun deleteIntent(
+        input: ReminderNotificationInput,
+        kind: NotificationKind,
+        action: NotificationAction,
+    ) = NotificationActionContract.createPendingIntent(
+        context = applicationContext,
+        reminderId = input.reminderId,
+        notificationKind = kind,
+        action = action,
+        expectedRevision = input.expectedRevision,
+        expectedNormalOccurrenceIndex = input.normalOccurrenceIndex,
+        expectedReminderModifiedAtEpochMillis = input.reminderModifiedAtEpochMillis,
+    )
 
     private fun ReminderNotificationInput.safeTitle(): String =
         title.trim().takeIf { it.isNotEmpty() } ?: "Reminder"

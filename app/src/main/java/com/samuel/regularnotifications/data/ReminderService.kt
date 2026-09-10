@@ -2,6 +2,7 @@ package com.samuel.regularnotifications.data
 
 import com.samuel.regularnotifications.data.local.ReminderEntity
 import com.samuel.regularnotifications.domain.ReminderDraft
+import com.samuel.regularnotifications.domain.ReminderEventType
 import com.samuel.regularnotifications.domain.ReminderInput
 import com.samuel.regularnotifications.scheduling.ReminderScheduler
 import java.time.Instant
@@ -86,4 +87,54 @@ class ReminderService(
         now: Instant = Instant.now(),
         zoneId: ZoneId = ZoneId.systemDefault(),
     ) = scheduler.reconcileAll(now, zoneId)
+
+    suspend fun resolveNotification(
+        id: Long,
+        eventType: ReminderEventType,
+        expectedRevision: Long,
+        expectedNormalOccurrenceIndex: Long,
+        expectedReminderModifiedAtEpochMillis: Long,
+        now: Instant = Instant.now(),
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): RepositoryActionResult = repository.resolve(
+        id = id,
+        eventType = eventType,
+        expectedRevision = expectedRevision,
+        expectedNormalOccurrenceIndex = expectedNormalOccurrenceIndex,
+        expectedReminderModifiedAtEpochMillis = expectedReminderModifiedAtEpochMillis,
+        now = now,
+        zoneId = zoneId,
+    )
+
+    suspend fun postponeNotification(
+        id: Long,
+        expectedRevision: Long,
+        expectedNormalOccurrenceIndex: Long,
+        expectedReminderModifiedAtEpochMillis: Long,
+        now: Instant = Instant.now(),
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): RepositoryActionResult = repository.postpone(
+        id = id,
+        expectedRevision = expectedRevision,
+        expectedNormalOccurrenceIndex = expectedNormalOccurrenceIndex,
+        expectedReminderModifiedAtEpochMillis = expectedReminderModifiedAtEpochMillis,
+        now = now,
+        zoneId = zoneId,
+    )
+
+    suspend fun acknowledgeTomorrowNotification(
+        id: Long,
+        expectedRevision: Long,
+        expectedNormalOccurrenceIndex: Long,
+        expectedReminderModifiedAtEpochMillis: Long,
+        now: Instant = Instant.now(),
+        zoneId: ZoneId = ZoneId.systemDefault(),
+    ): RepositoryActionResult = repository.acknowledgeTomorrow(
+        id = id,
+        expectedRevision = expectedRevision,
+        expectedNormalOccurrenceIndex = expectedNormalOccurrenceIndex,
+        expectedReminderModifiedAtEpochMillis = expectedReminderModifiedAtEpochMillis,
+        now = now,
+        zoneId = zoneId,
+    )
 }

@@ -103,31 +103,18 @@ class AlarmManagerReminderScheduler(
     }
 
     override fun cancelDue(reminderId: Long) {
-        alarmManager.cancel(
-            AlarmContract.createPendingIntent(
-                context = applicationContext,
-                reminderId = reminderId,
-                kind = NotificationKind.DUE,
-                expectedRevision = 0,
-            ),
-        )
+        cancelScheduledDue(reminderId)
+        notificationManager.cancelDue(reminderId)
     }
 
     override fun cancelTomorrow(reminderId: Long) {
-        alarmManager.cancel(
-            AlarmContract.createPendingIntent(
-                context = applicationContext,
-                reminderId = reminderId,
-                kind = NotificationKind.TOMORROW,
-                expectedRevision = 0,
-            ),
-        )
+        cancelScheduledTomorrow(reminderId)
+        notificationManager.cancelTomorrow(reminderId)
     }
 
     override fun cancelAll(reminderId: Long) {
         cancelDue(reminderId)
         cancelTomorrow(reminderId)
-        notificationManager.cancelAll(reminderId)
     }
 
     private fun applyPlan(
@@ -147,7 +134,7 @@ class AlarmManagerReminderScheduler(
                 expectedRevision = dueRevision,
             )
         } else {
-            cancelDue(snapshot.definition.id)
+            cancelScheduledDue(snapshot.definition.id)
             if (preserveNotificationKind != NotificationKind.DUE) {
                 notificationManager.cancelDue(snapshot.definition.id)
             }
@@ -164,7 +151,7 @@ class AlarmManagerReminderScheduler(
                 expectedRevision = previewRevision,
             )
         } else {
-            cancelTomorrow(snapshot.definition.id)
+            cancelScheduledTomorrow(snapshot.definition.id)
             if (preserveNotificationKind != NotificationKind.TOMORROW) {
                 notificationManager.cancelTomorrow(snapshot.definition.id)
             }
@@ -236,13 +223,42 @@ class AlarmManagerReminderScheduler(
         }
     }
 
+    private fun cancelScheduledDue(reminderId: Long) {
+        alarmManager.cancel(
+            AlarmContract.createPendingIntent(
+                context = applicationContext,
+                reminderId = reminderId,
+                kind = NotificationKind.DUE,
+                expectedRevision = 0,
+            ),
+        )
+    }
+
+    private fun cancelScheduledTomorrow(reminderId: Long) {
+        alarmManager.cancel(
+            AlarmContract.createPendingIntent(
+                context = applicationContext,
+                reminderId = reminderId,
+                kind = NotificationKind.TOMORROW,
+                expectedRevision = 0,
+            ),
+        )
+    }
+
     private fun postNotification(
         snapshot: ReminderSchedulingSnapshot,
         kind: NotificationKind,
     ): Boolean {
-        val revision = when (kind) {
-            NotificationKind.DUE -> requireNotNull(snapshot.state.outstandingDue).revision
-            NotificationKind.TOMORROW -> requireNotNull(snapshot.state.tomorrowPreview).revision
+        val (revision, occurrenceIndex) = when (kind) {
+            NotificationKind.DUE -> {
+                val due = requireNotNull(snapshot.state.outstandingDue)
+                due.revision to due.normalOccurrenceIndex
+            }
+
+            NotificationKind.TOMORROW -> {
+                val preview = requireNotNull(snapshot.state.tomorrowPreview)
+                preview.revision to preview.normalOccurrenceIndex
+            }
         }
         val input = ReminderNotificationInput(
             reminderId = snapshot.definition.id,
@@ -250,6 +266,8 @@ class AlarmManagerReminderScheduler(
             description = snapshot.definition.description,
             intervalDays = snapshot.definition.intervalDays,
             expectedRevision = revision,
+            normalOccurrenceIndex = occurrenceIndex,
+            reminderModifiedAtEpochMillis = snapshot.reminderModifiedAtEpochMillis,
         )
         return when (kind) {
             NotificationKind.DUE -> notificationManager.postDue(input)

@@ -15,6 +15,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -46,11 +47,19 @@ class ReminderRepositoryTest {
     fun actionProcessingUsesRevisionsAndRecordsDistinctEvents() = runBlocking {
         val reminderId = repository.createReminder(input(), utc, now)
         val initialDue = database.outstandingDueDao().getByReminderId(reminderId)!!
+        val initialReminder = database.reminderDao().getById(reminderId)!!
 
         assertEquals(0, initialDue.normalOccurrenceIndex)
         assertEquals(
             RepositoryActionResult.APPLIED,
-            repository.postpone(reminderId, expectedRevision = initialDue.revision, zoneId = utc, now = now),
+            repository.postpone(
+                reminderId,
+                expectedRevision = initialDue.revision,
+                expectedNormalOccurrenceIndex = initialDue.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = initialReminder.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = now,
+            ),
         )
         val postponed = database.outstandingDueDao().getByReminderId(reminderId)!!
         assertEquals(initialDue.normalOccurrenceIndex, postponed.normalOccurrenceIndex)
@@ -58,7 +67,14 @@ class ReminderRepositoryTest {
 
         assertEquals(
             RepositoryActionResult.STALE_REVISION,
-            repository.postpone(reminderId, expectedRevision = initialDue.revision, zoneId = utc, now = now),
+            repository.postpone(
+                reminderId,
+                expectedRevision = initialDue.revision,
+                expectedNormalOccurrenceIndex = initialDue.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = initialReminder.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = now,
+            ),
         )
         assertEquals(
             RepositoryActionResult.APPLIED,
@@ -74,6 +90,144 @@ class ReminderRepositoryTest {
         val events = database.reminderEventDao().getForReminder(reminderId)
         assertEquals(listOf("DISMISSED", "POSTPONED"), events.map { it.action })
         assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+    }
+
+    @Test
+    fun doneRecordsOneEventAdvancesCursorAndPreservesTheAnchor() = runBlocking {
+        val reminderId = repository.createReminder(
+            input().copy(intervalDays = 7),
+            utc,
+            now,
+        )
+        val before = database.reminderDao().getById(reminderId)!!
+        val due = database.outstandingDueDao().getByReminderId(reminderId)!!
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.resolve(
+                id = reminderId,
+                eventType = ReminderEventType.DONE,
+                expectedRevision = due.revision,
+                expectedNormalOccurrenceIndex = due.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = now,
+            ),
+        )
+
+        val after = database.reminderDao().getById(reminderId)!!
+        assertEquals(before.anchorLocalDate, after.anchorLocalDate)
+        assertEquals(before.anchorLocalTime, after.anchorLocalTime)
+        assertEquals(before.intervalDays, after.intervalDays)
+        assertEquals(0L, after.lastResolvedNormalOccurrenceIndex)
+        assertEquals(1L, after.nextNormalOccurrenceIndex)
+        assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(
+            listOf("DONE"),
+            database.reminderEventDao().getForReminder(reminderId).map { it.action },
+        )
+    }
+
+    @Test
+    fun dismissRecordsOneEventAndPreservesTheNormalSchedule() = runBlocking {
+        val reminderId = repository.createReminder(input().copy(intervalDays = 7), utc, now)
+        val before = database.reminderDao().getById(reminderId)!!
+        val due = database.outstandingDueDao().getByReminderId(reminderId)!!
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.resolve(
+                id = reminderId,
+                eventType = ReminderEventType.DISMISSED,
+                expectedRevision = due.revision,
+                expectedNormalOccurrenceIndex = due.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = now,
+            ),
+        )
+
+        val after = database.reminderDao().getById(reminderId)!!
+        assertEquals(before.anchorLocalDate, after.anchorLocalDate)
+        assertEquals(before.anchorLocalTime, after.anchorLocalTime)
+        assertEquals(before.intervalDays, after.intervalDays)
+        assertEquals(listOf("DISMISSED"), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+    }
+
+    @Test
+    fun staleDoneCannotResolveTheNextOccurrenceWhenARevisionNumberRepeats() = runBlocking {
+        val reminderId = repository.createReminder(input(), utc, now)
+        val before = database.reminderDao().getById(reminderId)!!
+        val firstDue = database.outstandingDueDao().getByReminderId(reminderId)!!
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.resolve(
+                id = reminderId,
+                eventType = ReminderEventType.DONE,
+                expectedRevision = firstDue.revision,
+                expectedNormalOccurrenceIndex = firstDue.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = now,
+            ),
+        )
+
+        val later = Instant.parse("2026-01-02T10:00:00Z")
+        val secondDue = database.outstandingDueDao().getByReminderId(reminderId)
+            ?: run {
+                repository.reconcileReminder(reminderId, utc, later)
+                database.outstandingDueDao().getByReminderId(reminderId)!!
+            }
+        assertEquals(firstDue.revision, secondDue.revision)
+        assertNotEquals(firstDue.normalOccurrenceIndex, secondDue.normalOccurrenceIndex)
+
+        assertEquals(
+            RepositoryActionResult.STALE_REVISION,
+            repository.resolve(
+                id = reminderId,
+                eventType = ReminderEventType.DONE,
+                expectedRevision = firstDue.revision,
+                expectedNormalOccurrenceIndex = firstDue.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = later,
+            ),
+        )
+        assertEquals(listOf("DONE"), database.reminderEventDao().getForReminder(reminderId).map { it.action })
+    }
+
+    @Test
+    fun staleActionFromAnEditedReminderIsRejectedEvenWithTheSameClockInstant() = runBlocking {
+        val reminderId = repository.createReminder(input(), utc, now)
+        val before = database.reminderDao().getById(reminderId)!!
+        val due = database.outstandingDueDao().getByReminderId(reminderId)!!
+
+        assertEquals(
+            RepositoryActionResult.APPLIED,
+            repository.updateReminder(
+                reminderId,
+                input().copy(title = "Edited reminder"),
+                utc,
+                now,
+            ),
+        )
+        val after = database.reminderDao().getById(reminderId)!!
+        assertTrue(after.modifiedAtEpochMillis > before.modifiedAtEpochMillis)
+
+        assertEquals(
+            RepositoryActionResult.STALE_REVISION,
+            repository.resolve(
+                id = reminderId,
+                eventType = ReminderEventType.DISMISSED,
+                expectedRevision = due.revision,
+                expectedNormalOccurrenceIndex = due.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = before.modifiedAtEpochMillis,
+                zoneId = utc,
+                now = now,
+            ),
+        )
+        assertEquals(emptyList<String>(), database.reminderEventDao().getForReminder(reminderId).map { it.action })
     }
 
     @Test
@@ -114,12 +268,15 @@ class ReminderRepositoryTest {
             scheduledNow,
         )
         val preview = database.tomorrowPreviewDao().getByReminderId(reminderId)!!
+        val reminder = database.reminderDao().getById(reminderId)!!
 
         assertEquals(
             RepositoryActionResult.APPLIED,
             repository.acknowledgeTomorrow(
                 reminderId,
                 expectedRevision = preview.revision,
+                expectedNormalOccurrenceIndex = preview.normalOccurrenceIndex,
+                expectedReminderModifiedAtEpochMillis = reminder.modifiedAtEpochMillis,
                 zoneId = utc,
                 now = lateSeenNow,
             ),
@@ -131,6 +288,7 @@ class ReminderRepositoryTest {
 
         assertTrue(database.tomorrowPreviewDao().getByReminderId(reminderId)!!.acknowledged)
         assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+        assertEquals(0L, database.reminderDao().getById(reminderId)!!.nextNormalOccurrenceIndex)
         assertEquals(listOf("TOMORROW_SEEN"), database.reminderEventDao().getForReminder(reminderId).map { it.action })
     }
 

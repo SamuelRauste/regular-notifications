@@ -14,6 +14,15 @@ enum class NotificationAction(val uriSegment: String) {
     TOMORROW_SEEN("tomorrow_seen"),
 }
 
+data class NotificationActionRequest(
+    val reminderId: Long,
+    val notificationKind: NotificationKind,
+    val action: NotificationAction,
+    val expectedRevision: Long,
+    val expectedNormalOccurrenceIndex: Long,
+    val expectedReminderModifiedAtEpochMillis: Long,
+)
+
 object NotificationActionContract {
     const val ACTION_NOTIFICATION =
         "com.samuel.regularnotifications.action.NOTIFICATION"
@@ -25,6 +34,10 @@ object NotificationActionContract {
         "com.samuel.regularnotifications.extra.ACTION"
     const val EXTRA_EXPECTED_REVISION =
         "com.samuel.regularnotifications.extra.EXPECTED_REVISION"
+    const val EXTRA_EXPECTED_OCCURRENCE_INDEX =
+        "com.samuel.regularnotifications.extra.EXPECTED_OCCURRENCE_INDEX"
+    const val EXTRA_EXPECTED_REMINDER_MODIFIED_AT =
+        "com.samuel.regularnotifications.extra.EXPECTED_REMINDER_MODIFIED_AT"
 
     fun createPendingIntent(
         context: Context,
@@ -32,7 +45,17 @@ object NotificationActionContract {
         notificationKind: NotificationKind,
         action: NotificationAction,
         expectedRevision: Long,
+        expectedNormalOccurrenceIndex: Long = 0,
+        expectedReminderModifiedAtEpochMillis: Long = 0,
     ): PendingIntent {
+        require(reminderId > 0) { "Reminder ID must be positive." }
+        require(expectedRevision >= 0) { "Action revision must not be negative." }
+        require(expectedNormalOccurrenceIndex >= 0) {
+            "Action occurrence index must not be negative."
+        }
+        require(expectedReminderModifiedAtEpochMillis >= 0) {
+            "Reminder modification timestamp must not be negative."
+        }
         require(isAllowed(notificationKind, action)) {
             "Notification action $action is not valid for $notificationKind."
         }
@@ -50,6 +73,11 @@ object NotificationActionContract {
             putExtra(EXTRA_NOTIFICATION_KIND, notificationKind.uriSegment)
             putExtra(EXTRA_ACTION, action.uriSegment)
             putExtra(EXTRA_EXPECTED_REVISION, expectedRevision)
+            putExtra(EXTRA_EXPECTED_OCCURRENCE_INDEX, expectedNormalOccurrenceIndex)
+            putExtra(
+                EXTRA_EXPECTED_REMINDER_MODIFIED_AT,
+                expectedReminderModifiedAtEpochMillis,
+            )
         }
 
         return PendingIntent.getBroadcast(
@@ -61,6 +89,57 @@ object NotificationActionContract {
             ),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    fun parse(intent: Intent): NotificationActionRequest? = runCatching {
+        parseStrict(intent)
+    }.getOrNull()
+
+    private fun parseStrict(intent: Intent): NotificationActionRequest? {
+        if (intent.action != ACTION_NOTIFICATION) return null
+
+        val reminderId = intent.getLongExtra(EXTRA_REMINDER_ID, Long.MIN_VALUE)
+        val notificationKind = NotificationKind.values().firstOrNull {
+            it.uriSegment == intent.getStringExtra(EXTRA_NOTIFICATION_KIND)
+        }
+        val action = NotificationAction.values().firstOrNull {
+            it.uriSegment == intent.getStringExtra(EXTRA_ACTION)
+        }
+        val expectedRevision = intent.getLongExtra(EXTRA_EXPECTED_REVISION, Long.MIN_VALUE)
+        val expectedNormalOccurrenceIndex = intent.getLongExtra(
+            EXTRA_EXPECTED_OCCURRENCE_INDEX,
+            Long.MIN_VALUE,
+        )
+        val expectedReminderModifiedAtEpochMillis = intent.getLongExtra(
+            EXTRA_EXPECTED_REMINDER_MODIFIED_AT,
+            Long.MIN_VALUE,
+        )
+        if (reminderId <= 0 ||
+            notificationKind == null ||
+            action == null ||
+            expectedRevision < 0 ||
+            expectedNormalOccurrenceIndex < 0 ||
+            expectedReminderModifiedAtEpochMillis < 0 ||
+            !isAllowed(notificationKind, action)
+        ) {
+            return null
+        }
+
+        val expectedData = NotificationIdentity.actionPendingIntentData(
+            reminderId = reminderId,
+            kind = notificationKind,
+            actionSegment = action.uriSegment,
+        )
+        if (intent.dataString != expectedData) return null
+
+        return NotificationActionRequest(
+            reminderId = reminderId,
+            notificationKind = notificationKind,
+            action = action,
+            expectedRevision = expectedRevision,
+            expectedNormalOccurrenceIndex = expectedNormalOccurrenceIndex,
+            expectedReminderModifiedAtEpochMillis = expectedReminderModifiedAtEpochMillis,
         )
     }
 

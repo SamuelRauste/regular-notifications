@@ -6,6 +6,7 @@ import com.samuel.regularnotifications.data.ReminderRepository
 import com.samuel.regularnotifications.data.ReminderService
 import com.samuel.regularnotifications.data.local.ReminderDatabase
 import com.samuel.regularnotifications.data.local.ReminderDatabaseProvider
+import com.samuel.regularnotifications.notifications.NotificationActionProcessor
 import com.samuel.regularnotifications.notifications.ReminderNotificationChannels
 import com.samuel.regularnotifications.scheduling.AlarmManagerReminderScheduler
 import com.samuel.regularnotifications.scheduling.AndroidExactAlarmCapability
@@ -58,4 +59,7 @@ class AppContainer(context: Context) {
         )
 
     val reminderService: ReminderService = ReminderService(reminderRepository, reminderScheduler)
+
+    val notificationActionProcessor: NotificationActionProcessor =
+        NotificationActionProcessor(reminderService, reminderScheduler)
 }

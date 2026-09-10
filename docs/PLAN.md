@@ -55,13 +55,30 @@ are marked complete only after the relevant checks have been run.
 
 ## Phase 5 — Notification actions
 
-- [ ] Implement Done, Dismiss, +1 day, and Tomorrow Seen action receivers.
-- [ ] Record each event and remove the displayed notification.
-- [ ] Preserve normal schedule for Done/Dismiss.
-- [ ] Postpone only the displayed occurrence by one calendar day; do not change the reminder's recurrence anchor or normal schedule.
-- [ ] Make Seen acknowledge only its Tomorrow preview, remove that preview notification, preserve recurrence and actual-reminder status, and reject stale revisions.
-- [ ] Implement notification swipe dismissal where Android reliably exposes it.
-- [ ] Add action-processing tests.
+- [x] Implement Done, Dismiss, +1 day, and Tomorrow Seen action receivers.
+- [x] Record each event and remove the displayed notification.
+- [x] Preserve normal schedule for Done/Dismiss.
+- [x] Postpone only the displayed occurrence by one calendar day; do not change the reminder's recurrence anchor or normal schedule.
+- [x] Make Seen acknowledge only its Tomorrow preview, remove that preview notification, preserve recurrence and actual-reminder status, and reject stale revisions.
+- [x] Implement notification swipe dismissal where Android reliably exposes it.
+- [x] Add action-processing tests.
+
+Implementation notes for this phase:
+
+- The explicit `NotificationActionReceiver` parses and validates the complete
+  action identity before starting work, uses the application-scoped container,
+  calls `goAsync()`, and always finishes its `PendingResult`.
+- `NotificationActionProcessor` serializes in-process actions, delegates the
+  transactional event/state mutation to Room, cancels the corresponding alarm
+  and visible notification after a valid or already-consumed action, and then
+  reconciles from Room. A stale action does not cancel a newer notification.
+- DUE notification delete intents use Dismiss semantics. TOMORROW delete
+  intents use Seen semantics. These are best-effort because Android controls
+  when it delivers notification delete intents.
+- Action tokens include the state revision, normal occurrence index, and a
+  monotonic reminder-definition modification timestamp. This closes the case
+  where an old action's revision number could otherwise repeat after a later
+  occurrence or edit.
 
 ## Corrective/product pass between Phase 4 and Phase 5
 
@@ -148,7 +165,7 @@ are marked complete only after the relevant checks have been run.
 - `ReminderService` coordinates CRUD with `ReminderScheduler`; the repository stays Android-free. The application container owns one scheduler and one Room repository, and startup plus narrow boot/time/time-zone receivers reconcile all rows.
 - Alarm PendingIntent data contains the full reminder ID and notification kind. The integer request-code hash is not the sole identity. Alarm delivery re-reconciles Room state and accepts only current expected revisions; a DUE seed revision of zero is used only for the future next-normal alarm.
 - Valid alarm delivery posts through the Phase 3 notification manager and does not immediately recreate the delivered one-shot alarm. A later reconciliation can safely rebuild it from Room if the visible notification is lost.
-- Notification body taps use a stable immutable activity PendingIntent that opens the main list; action PendingIntents remain inert until Phase 5.
+- Notification body taps use a stable immutable activity PendingIntent that opens the main list. Action PendingIntents are parsed by the explicit receiver and processed through the application-scoped Room/action processor; DUE and TOMORROW delete intents provide best-effort swipe semantics.
 - `supportsTomorrow(intervalDays)` is the shared pure eligibility rule used by the state machine and notification/scheduling code.
 - Tomorrow previews are acknowledged per logical normal occurrence and use one `Seen` action. They are suppressed when the reminder is already due and are not replayed when obsolete after recovery.
 - Every-1-day reminders never create Tomorrow preview state or Tomorrow notifications. For eligible schedules, an existing preview remains current after `previewAt` until Seen, supersession, or the actual occurrence becoming due; a missing past preview is not replayed during recovery.
@@ -216,3 +233,11 @@ device or emulator is available. Physical testing remains required for exact
 access grant/revocation fallback behavior, Samsung timing, lock-screen delivery,
 battery saver/Doze behavior, reboot, time-zone changes, and vendor-specific
 background policies.
+
+Phase 5 verification passed `test`, `lint`, `assembleDebug`, and
+`assembleAndroidTest`. The debug APK and Android-test APK were created. A
+connected instrumentation run was not possible because `adb devices` failed
+before listing devices: the available adb process could not create its Android
+user directory. Physical testing remains required for real notification action
+delivery, swipe delete intents, lock-screen behavior, multiple simultaneous
+reminders, and vendor-specific notification policies.

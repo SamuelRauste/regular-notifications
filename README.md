@@ -9,14 +9,15 @@ advertisements, or network access.
 
 ## Status
 
-Phase 4 is complete, followed by corrective passes for global pause,
+Phase 5 is complete, followed by corrective passes for global pause,
 notification-permission recovery, and exact-alarm scheduling. Enabled reminders
 use Room-derived, one-shot AlarmManager scheduling, alarm delivery, startup
 reconciliation, and boot/clock/time-zone recovery. The app can create, view,
 edit, enable, disable, and permanently delete local reminders through a short
-Compose/Material 3 interface. Notification action processing remains Phase 5.
-Android instrumentation tests compile but still need a usable phone or emulator
-to run.
+Compose/Material 3 interface. Done, Dismiss, +1 day, Tomorrow Seen, and
+notification-swipe handling record actions in Room and reconcile the next
+schedule. Android instrumentation tests compile but still need a usable phone
+or emulator to run.
 
 ## Prerequisites
 
@@ -92,8 +93,10 @@ show an "app is running" notification. Android can terminate the process and
 later start the alarm receiver when an alarm is due. Edit is the way to correct
 a title/description typo or change a schedule. Delete is permanent:
 confirmation removes the Room reminder/history and both derived alarm and
-visible-notification kinds. Notification action buttons remain inert until
-Phase 5.
+visible-notification kinds. Notification action buttons update Room history,
+remove the corresponding visible notification, and reconcile the next derived
+schedule. A notification swipe maps to Dismiss for DUE and Seen for TOMORROW
+through the notification delete intent.
 
 ## Inspect Phase 3 notifications
 
@@ -108,9 +111,11 @@ adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNo
 ```
 
 Repeating a SHOW command with the same reminder ID replaces the same logical
-notification. The debug receiver is excluded from release builds. Its action
-buttons are contract stubs until Phase 5, and the commands do not schedule
-future reminders; the normal app scheduler does.
+notification. The debug receiver is excluded from release builds. These
+commands inspect notification presentation only: they do not create a Room
+reminder or schedule future alarms, so their sample action buttons are not an
+end-to-end action test. Normal app reminders use the Room-backed action
+processor and scheduler.
 
 ## Run on a physical phone
 

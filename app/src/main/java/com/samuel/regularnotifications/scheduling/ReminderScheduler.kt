@@ -29,8 +29,10 @@ interface ReminderScheduler {
         zoneId: ZoneId = ZoneId.systemDefault(),
     )
 
+    /** Cancels both the DUE alarm and its visible notification. */
     fun cancelDue(reminderId: Long)
 
+    /** Cancels both the TOMORROW alarm and its visible notification. */
     fun cancelTomorrow(reminderId: Long)
 
     fun cancelAll(reminderId: Long)

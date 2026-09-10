@@ -32,6 +32,18 @@ class ReminderNotificationFactoryTest {
             notification.contentIntent,
             NotificationContentIntent.create(context, reminderId = 42, kind = NotificationKind.DUE),
         )
+        assertEquals(
+            notification.deleteIntent,
+            NotificationActionContract.createPendingIntent(
+                context = context,
+                reminderId = 42,
+                notificationKind = NotificationKind.DUE,
+                action = NotificationAction.DISMISS,
+                expectedRevision = 3,
+                expectedNormalOccurrenceIndex = 5,
+                expectedReminderModifiedAtEpochMillis = 100,
+            ),
+        )
         assertNotEquals(notification.contentIntent, notification.actions[0].actionIntent)
     }
 
@@ -52,6 +64,18 @@ class ReminderNotificationFactoryTest {
         assertEquals(
             notification.contentIntent,
             NotificationContentIntent.create(context, reminderId = 42, kind = NotificationKind.TOMORROW),
+        )
+        assertEquals(
+            notification.deleteIntent,
+            NotificationActionContract.createPendingIntent(
+                context = context,
+                reminderId = 42,
+                notificationKind = NotificationKind.TOMORROW,
+                action = NotificationAction.TOMORROW_SEEN,
+                expectedRevision = 3,
+                expectedNormalOccurrenceIndex = 5,
+                expectedReminderModifiedAtEpochMillis = 100,
+            ),
         )
     }
 
@@ -117,6 +141,8 @@ class ReminderNotificationFactoryTest {
         description = "Bins by the door",
         intervalDays = intervalDays,
         expectedRevision = 3,
+        normalOccurrenceIndex = 5,
+        reminderModifiedAtEpochMillis = 100,
     )
 
     private fun Notification.actionTitles(): List<String> =

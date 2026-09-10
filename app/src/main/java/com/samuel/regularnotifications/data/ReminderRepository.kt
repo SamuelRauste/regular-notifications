@@ -152,7 +152,7 @@ class ReminderRepository(
                 id = id,
                 nextNormal = nextNormal,
                 createdAtEpochMillis = existing.createdAtEpochMillis,
-                modifiedAtEpochMillis = now.toEpochMilli(),
+                modifiedAtEpochMillis = nextModifiedAt(existing, now),
                 zoneId = zoneId,
             ),
         )
@@ -199,7 +199,7 @@ class ReminderRepository(
             )
             val updated = existing.copy(
                 enabled = enabled,
-                modifiedAtEpochMillis = now.toEpochMilli(),
+                modifiedAtEpochMillis = nextModifiedAt(existing, now),
             )
             reminderDao.update(updated)
             persistSchedule(updated, skipped, now, zoneId)
@@ -252,10 +252,12 @@ class ReminderRepository(
         val masterEnabled = ensureMasterEnabled()
         val reminder = reminderDao.getById(id) ?: return@withTransaction null
         val state = reconcileStored(reminder, now, zoneId, masterEnabled)
+        val stored = requireNotNull(reminderDao.getById(id))
         ReminderSchedulingSnapshot(
-            definition = requireNotNull(reminderDao.getById(id)).toDefinition(),
+            definition = stored.toDefinition(),
             state = state,
             masterEnabled = masterEnabled,
+            reminderModifiedAtEpochMillis = stored.modifiedAtEpochMillis,
         )
     }
 
@@ -267,10 +269,12 @@ class ReminderRepository(
         val masterEnabled = ensureMasterEnabled()
         reminderDao.getAll().map { reminder ->
             val state = reconcileStored(reminder, now, zoneId, masterEnabled)
+            val stored = requireNotNull(reminderDao.getById(reminder.id))
             ReminderSchedulingSnapshot(
-                definition = requireNotNull(reminderDao.getById(reminder.id)).toDefinition(),
+                definition = stored.toDefinition(),
                 state = state,
                 masterEnabled = masterEnabled,
+                reminderModifiedAtEpochMillis = stored.modifiedAtEpochMillis,
             )
         }
     }
@@ -278,6 +282,8 @@ class ReminderRepository(
     suspend fun postpone(
         id: Long,
         expectedRevision: Long? = null,
+        expectedNormalOccurrenceIndex: Long? = null,
+        expectedReminderModifiedAtEpochMillis: Long? = null,
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
@@ -286,6 +292,16 @@ class ReminderRepository(
         val due = normalized.state.outstandingDue
             ?: return@withTransaction RepositoryActionResult.NO_OUTSTANDING_DUE
         if (expectedRevision != null && expectedRevision != due.revision) {
+            return@withTransaction RepositoryActionResult.STALE_REVISION
+        }
+        if (expectedNormalOccurrenceIndex != null &&
+            expectedNormalOccurrenceIndex != due.normalOccurrenceIndex
+        ) {
+            return@withTransaction RepositoryActionResult.STALE_REVISION
+        }
+        if (expectedReminderModifiedAtEpochMillis != null &&
+            expectedReminderModifiedAtEpochMillis != normalized.reminder.modifiedAtEpochMillis
+        ) {
             return@withTransaction RepositoryActionResult.STALE_REVISION
         }
 
@@ -309,6 +325,8 @@ class ReminderRepository(
         id: Long,
         eventType: ReminderEventType,
         expectedRevision: Long? = null,
+        expectedNormalOccurrenceIndex: Long? = null,
+        expectedReminderModifiedAtEpochMillis: Long? = null,
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
@@ -318,6 +336,16 @@ class ReminderRepository(
         val due = normalized.state.outstandingDue
             ?: return@withTransaction RepositoryActionResult.NO_OUTSTANDING_DUE
         if (expectedRevision != null && expectedRevision != due.revision) {
+            return@withTransaction RepositoryActionResult.STALE_REVISION
+        }
+        if (expectedNormalOccurrenceIndex != null &&
+            expectedNormalOccurrenceIndex != due.normalOccurrenceIndex
+        ) {
+            return@withTransaction RepositoryActionResult.STALE_REVISION
+        }
+        if (expectedReminderModifiedAtEpochMillis != null &&
+            expectedReminderModifiedAtEpochMillis != normalized.reminder.modifiedAtEpochMillis
+        ) {
             return@withTransaction RepositoryActionResult.STALE_REVISION
         }
 
@@ -340,6 +368,8 @@ class ReminderRepository(
     suspend fun acknowledgeTomorrow(
         id: Long,
         expectedRevision: Long? = null,
+        expectedNormalOccurrenceIndex: Long? = null,
+        expectedReminderModifiedAtEpochMillis: Long? = null,
         zoneId: ZoneId = ZoneId.systemDefault(),
         now: Instant = clock(),
     ): RepositoryActionResult = database.withTransaction {
@@ -349,6 +379,11 @@ class ReminderRepository(
             ?: return@withTransaction RepositoryActionResult.NO_TOMORROW_PREVIEW
         if (persistedPreview.acknowledged) {
             return@withTransaction RepositoryActionResult.ALREADY_ACKNOWLEDGED
+        }
+        if (expectedReminderModifiedAtEpochMillis != null &&
+            expectedReminderModifiedAtEpochMillis != reminder.modifiedAtEpochMillis
+        ) {
+            return@withTransaction RepositoryActionResult.STALE_REVISION
         }
 
         // Reconciliation preserves a current (slightly late) preview. It can
@@ -362,6 +397,11 @@ class ReminderRepository(
             return@withTransaction RepositoryActionResult.ALREADY_ACKNOWLEDGED
         }
         if (expectedRevision != null && expectedRevision != preview.revision) {
+            return@withTransaction RepositoryActionResult.STALE_REVISION
+        }
+        if (expectedNormalOccurrenceIndex != null &&
+            expectedNormalOccurrenceIndex != preview.normalOccurrenceIndex
+        ) {
             return@withTransaction RepositoryActionResult.STALE_REVISION
         }
 
@@ -490,6 +530,15 @@ class ReminderRepository(
         val definition: ReminderDefinition,
         val state: ReminderScheduleState,
     )
+
+    private fun nextModifiedAt(existing: ReminderEntity, now: Instant): Long {
+        val nowEpochMillis = now.toEpochMilli()
+        return if (existing.modifiedAtEpochMillis == Long.MAX_VALUE) {
+            Long.MAX_VALUE
+        } else {
+            maxOf(nowEpochMillis, existing.modifiedAtEpochMillis + 1)
+        }
+    }
 }
 
 private fun ReminderDefinition.toEntity(

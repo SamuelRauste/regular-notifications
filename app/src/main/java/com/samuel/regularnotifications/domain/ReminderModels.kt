@@ -99,6 +99,8 @@ data class ReminderSchedulingSnapshot(
     val definition: ReminderDefinition,
     val state: ReminderScheduleState,
     val masterEnabled: Boolean = true,
+    /** Monotonic definition version used to reject actions from edited notifications. */
+    val reminderModifiedAtEpochMillis: Long = 0,
 )
 
 enum class ReminderEventType {

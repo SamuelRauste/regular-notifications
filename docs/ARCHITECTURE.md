@@ -31,7 +31,8 @@ global reminder-delivery switch.
 Phase 2 adds the Compose reminder-management UI on top of the persisted,
 pure-Kotlin recurrence/state model. Phase 3 adds notification presentation,
 permission UX, and action contracts. Phase 4 adds Room-derived AlarmManager
-scheduling and delivery. Phase 5 will add notification action business logic.
+scheduling and delivery. Phase 5 adds Room-backed notification action
+processing and notification-swipe handling. A history screen remains Phase 6.
 
 ## Planned packages
 
@@ -139,10 +140,14 @@ anchored occurrence.
 
 Stable notification identities are derived from `(reminderId, kind)`, with
 separate namespaces for `DUE` and `TOMORROW`. Stable alarm/PendingIntent
-identities use the same pair. State revisions are persisted so later receiver
-work can reject stale actions. The database primary keys, transaction
-boundaries, and revision checks prevent duplicate delivery rather than relying
-on cleanup after several notifications have already been posted.
+identities use the same pair. Action PendingIntents carry three expected-state
+tokens: the state revision, the logical normal-occurrence index, and the
+reminder definition's monotonic modification timestamp. Room checks all three
+inside the action transaction, so an old button cannot resolve a newer
+occurrence or an edited reminder even if a revision number repeats. The
+database primary keys, transaction boundaries, and these checks prevent
+duplicate delivery rather than relying on cleanup after several notifications
+have already been posted.
 
 Room schema version 2 removed the old duration anchor and interval-unit fields
 in favor of `intervalDays`; version 3 adds the settings row. This is a
@@ -308,11 +313,23 @@ is stable per kind. This makes DUE and TOMORROW distinct and avoids reducing a
 replaces it; cancellation uses the same deterministic pair.
 
 Action `PendingIntent`s target the explicit `NotificationActionReceiver` and
-carry the reminder ID, notification kind, action, and expected revision. Their
-data URI contains the full reminder/kind/action identity, their request code is
-stable, and they use `FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE`. The receiver is an
-inert Phase 3 stub that only logs the action name; Phase 5 will add repository
-mutations and notification cancellation.
+carry the reminder ID, notification kind, action, and the three expected-state
+tokens described above. Their data URI contains the full
+reminder/kind/action identity, their request code is stable, and they use
+`FLAG_UPDATE_CURRENT | FLAG_IMMUTABLE`. The parser rejects missing, negative,
+unknown, or kind/action-mismatched values and verifies the data URI before a
+request reaches Room.
+
+`NotificationActionProcessor` is the application-scoped boundary for Done,
+Dismiss, +1 day, Tomorrow Seen, and notification delete intents. It serializes
+actions within the process, lets the repository perform the transactional
+revision/token check and event insert, cancels the corresponding alarm and
+visible notification after an applied or already-resolved action, and then
+reconciles the reminder from Room. A stale action is not allowed to cancel a
+newer notification; it only triggers a safe reconciliation. A missing reminder
+cancels all derived state. DUE delete intents map to Dismiss and TOMORROW delete
+intents map to Seen, which gives notification swipes the same recorded meaning
+where Android delivers the delete intent.
 
 The manifest declares `POST_NOTIFICATIONS` and `SCHEDULE_EXACT_ALARM`. On
 Android 13 and newer, the list screen shows a small user-initiated notification
@@ -326,15 +343,17 @@ blocks reminder CRUD.
 
 The debug variant includes a temporary exported `adb` receiver that posts or
 cancels sample DUE/TOMORROW notifications. It is not part of release builds
-and does not schedule alarms. Notification body taps now use a stable immutable
-activity PendingIntent to open the existing main reminder list. Phase 5 will
-implement the action behavior; the production action receiver remains inert.
+and does not schedule alarms. Notification body taps use a stable immutable
+activity PendingIntent to open the existing main reminder list. Debug sample
+notifications exercise presentation only; production notifications use the
+Room-backed action processor above.
 
 ## Reliability and privacy
 
 Receivers do short database/scheduling work using `goAsync()` and the
-application scope. The receiver never trusts alarm extras without reloading
-Room state and checking the current revision. The app does not need to remain
+application scope, and action receivers always call `PendingResult.finish()` in
+a `finally` block. Receivers never trust alarm/action extras without reloading
+Room state and checking the current revision/tokens. The app does not need to remain
 open, stay in Recents, run a foreground service, or show a persistent process
 notification: Android may terminate the process and later start the explicit
 alarm receiver. No network permission, accounts,
@@ -364,7 +383,8 @@ precedence, stale revisions, and early delivery.
 Room DAO tests cover persistence, event history, and master-switch skip/resume
 semantics. AndroidX tests cover
 repository-backed list/editor ViewModels and the high-value empty-state Compose
-path. Scheduling tests will verify stable identifiers, cancellation/reschedule
-behavior, editing, deletion, and missed-occurrence handling. Action tests will
-verify Done, Dismiss, postponement, and deletion races when those later phases
-are implemented.
+path. Scheduling tests verify stable identifiers, cancellation/reschedule
+behavior, editing, deletion, and missed-occurrence handling. Action tests verify
+strict PendingIntent parsing, Done, Dismiss, postponement, Tomorrow Seen,
+duplicate or stale actions, token protection after edits, event recording, and
+reconciliation.

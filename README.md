@@ -9,8 +9,9 @@ advertisements, or network access.
 
 ## Status
 
-Phase 5 is complete, followed by corrective passes for global pause,
-notification-permission recovery, and exact-alarm scheduling. Enabled reminders
+Phase 5 is complete, with corrective passes for global pause,
+notification-permission recovery, exact-alarm scheduling, and edit semantics.
+Enabled reminders
 use Room-derived, one-shot AlarmManager scheduling, alarm delivery, startup
 reconciliation, and boot/clock/time-zone recovery. The app can create, view,
 edit, enable, disable, and permanently delete local reminders through a short
@@ -72,6 +73,26 @@ without fake Done/Dismiss history; turning the switch back on resumes at the
 next future occurrence on each original anchor, without an overdue backlog.
 The individual switch still behaves independently, so an individually disabled
 reminder remains disabled after a global pause/resume.
+
+## Editing a reminder
+
+A title- or description-only edit preserves recurrence progress: the resolved/
+skipped cursor, a logically current DUE occurrence, and a logically current
+Tomorrow preview stay intact. The new text is used when the current notification
+is rebuilt. No completion, dismissal, postponement, or history event is created
+by editing.
+
+Changing the first date, first time, or interval replaces the logical schedule.
+Its old DUE/Tomorrow state and cursor are not reused because their occurrence
+indices belong to the old schedule. Past occurrences on the replacement
+schedule are skipped without history, and only valid future work is rebuilt.
+
+After every successful edit, the app cancels both old alarm kinds and both
+visible notification kinds, then rebuilds derived work from Room. A currently
+due reminder or current unacknowledged Tomorrow preview is queued immediately
+with the edited text; the normal one-shot delivery path posts it without an
+alarm loop. Old notification buttons and swipes carry the previous modification
+token and are safely rejected.
 
 ## Using the app
 

@@ -80,6 +80,21 @@ Implementation notes for this phase:
   where an old action's revision number could otherwise repeat after a later
   occurrence or edit.
 
+## Corrective pass after Phase 5 — edit semantics and stale presentation
+
+- [x] Preserve `lastResolvedNormalOccurrenceIndex` and logically current
+  DUE/TOMORROW state for title- or description-only edits.
+- [x] Treat anchor date/time or interval changes as a replacement schedule:
+  invalidate old derived state, reset incompatible cursor progress, and skip
+  past replacement-schedule occurrences without history.
+- [x] Keep editor enabled-state changes on the same inactive skip/resume rules
+  as the direct individual enable/disable switch.
+- [x] After every successful edit, cancel old DUE/TOMORROW alarms and visible
+  notifications, then reconcile only the current Room-derived state.
+- [x] Keep old notification actions stale through the monotonic modification
+  timestamp after every edit.
+- [x] Add focused repository/service tests and update edit/manual-test docs.
+
 ## Corrective/product pass between Phase 4 and Phase 5
 
 - [x] Persist one global `masterEnabled` reminder-delivery setting in Room
@@ -154,6 +169,18 @@ Implementation notes for this phase:
 - Every-X-days schedules use the device's current time zone and preserve the original local calendar anchor and wall-clock time.
 - There is one persisted outstanding due state and one persisted Tomorrow preview state per reminder. Normal recurrence remains canonical; postponed state is auxiliary and can be collapsed when a newer normal occurrence becomes due.
 - The reminder stores one resolved/skipped normal-occurrence cursor so Done/Dismiss cannot recreate resolved occurrences and disabled-period occurrences cannot reappear after recovery or a time-zone change; this cursor does not alter the recurrence anchor and does not create history for skipped occurrences.
+- Metadata-only edits (title/description with unchanged enabled state and
+  schedule fields) preserve the resolved/skipped cursor and any logically
+  current DUE/TOMORROW state. The changed monotonic modification timestamp
+  invalidates old notification actions without creating history.
+- Schedule-defining edits (anchor date, anchor time, or interval) replace the
+  old logical occurrence sequence. They intentionally reset incompatible cursor
+  progress, discard old derived DUE/TOMORROW rows, skip past occurrences on the
+  replacement schedule without history, and rebuild only valid future work.
+- An editor enabled-state change uses the same inactive skip/resume semantics as
+  the direct enable/disable control. Every successful edit then cancels old
+  visible notifications and alarms before `ReminderService` reconciles the
+  current Room state.
 - Disabled reminders do not accumulate missed occurrences. Re-enabling resumes at the first future occurrence on the original Every-X-days schedule; it does not restart the schedule from the re-enable date.
 - The existing `lastResolvedNormalOccurrenceIndex` column is reused as the resolved/skipped cursor; no additional cursor field is required. The separate `app_settings` row is Room schema version 3.
 - Disabled reminder cards show `Every X days · Paused` instead of a cached `Next:` date. Edit, delete, and enable/disable controls include the reminder title in their accessibility semantics while keeping the visible labels short.
@@ -241,3 +268,11 @@ before listing devices: the available adb process could not create its Android
 user directory. Physical testing remains required for real notification action
 delivery, swipe delete intents, lock-screen behavior, multiple simultaneous
 reminders, and vendor-specific notification policies.
+
+The post-Phase-5 edit-semantics corrective pass passed `test`, `lint`,
+`assembleDebug`, and `assembleAndroidTest`. Connected instrumentation was not
+run because `adb devices` again failed before listing devices: the available adb
+process could not create its Android user directory. Physical testing remains
+required for visible-notification replacement after metadata edits, old-action
+rejection after edits, replacement-schedule alarm cancellation, and paused
+editing on a real device.

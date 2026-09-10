@@ -157,6 +157,30 @@ delivery.
   action if Android still exposes it. Verify no reminder or event is
   recreated and all associated alarms/notifications remain cancelled.
 
+### Edit and stale-notification corrective checks
+
+- [ ] Create an enabled reminder and let it become due. While its DUE
+  notification is visible, edit only the title and save.
+- [ ] Verify the old DUE notification disappears, the reminder remains due,
+  and the replacement notification appears or updates with the new title.
+- [ ] Verify the edit did not complete, dismiss, postpone, or otherwise advance
+  the occurrence. If an old action can still be invoked, it must do nothing.
+- [ ] Repeat the title-only check with a description-only edit.
+- [ ] Create an eligible future Tomorrow preview. Edit only title/description,
+  then verify the stale preview is removed and the current unacknowledged
+  preview is rebuilt with edited text. Seen status must remain unchanged.
+- [ ] Change the first date/time or interval while an old DUE/TOMORROW alarm or
+  notification exists. Verify it is cancelled, does not fire later, and only
+  valid future work on the replacement schedule remains.
+- [ ] Edit enabled to disabled. Verify DUE/TOMORROW alarms and visible
+  notifications are removed, no fake Done/Dismiss history is created, and the
+  original anchor stays intact.
+- [ ] Edit disabled to enabled after one or more occurrences have passed.
+  Verify it resumes at the first future anchored occurrence without a backlog.
+- [ ] Repeat a title or schedule edit while `All reminders` is paused and while
+  the individual reminder is disabled. Verify no notification or alarm appears
+  until the appropriate delivery control is re-enabled.
+
 ## Reminder lifecycle
 
 - [ ] Open the app with no reminders and verify the empty state and both Add actions are obvious.

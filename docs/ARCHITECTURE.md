@@ -114,6 +114,15 @@ The existing `lastResolvedNormalOccurrenceIndex` column is intentionally reused
 as this resolved/skipped cursor. No additional cursor column is needed; the
 name remains for compatibility with the Phase 1 schema.
 
+An edit classifies as metadata-only when its anchor date/time, interval, and
+enabled state are unchanged; changing only title or description preserves this
+cursor and the persisted DUE/TOMORROW rows. An enabled-state-only edit uses the
+same inactive-occurrence skip/resume transition as the direct list switch.
+Changing the anchor date, anchor time, or interval creates a replacement logical
+schedule: its old cursor and DUE/TOMORROW rows are discarded because their
+indices belong to the old definition. The repository skips past occurrences on
+the replacement schedule without history, then derives only current/future work.
+
 The Room schema version is now 3. It adds one `app_settings` singleton row with
 `masterEnabled`. The row is initialized to true when the repository first
 opens/reconciles the database. Development databases still use the existing
@@ -195,12 +204,21 @@ making the repository Android-aware. The application container owns one
 container.
 
 Editing through the existing editor can correct a title/description typo or
-change the schedule; the updated definition is the source for subsequent
-notifications and obsolete derived schedule rows are rebuilt. Delete remains
-permanent. The service cancels both alarm identities and both visible
-notification identities before the Room row is removed; Room foreign keys then
-cascade its outstanding state and history. A stale delivery after deletion
-reloads Room, finds no reminder, and safely cancels without posting.
+change the schedule. `ReminderRepository` owns the metadata-versus-schedule
+classification described above; Compose does not make recurrence decisions.
+After any successful repository edit, `ReminderService` cancels both old alarm
+identities and both visible notification identities, then asks the scheduler to
+reconcile the Room-current state. A current DUE or unacknowledged current
+TOMORROW therefore receives an immediate one-shot re-delivery using the edited
+text, while future work is merely rescheduled. The delivery path skips its own
+kind after posting, so this refresh does not form an alarm loop or duplicate
+visible notification. The monotonic reminder modification timestamp changes on
+every edit, so actions from the cancelled old presentation remain stale.
+
+Delete remains permanent. The service cancels both alarm identities and both
+visible notification identities before the Room row is removed; Room foreign
+keys then cascade its outstanding state and history. A stale delivery after
+deletion reloads Room, finds no reminder, and safely cancels without posting.
 
 `AlarmManagerReminderScheduler` calls
 `AlarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP,

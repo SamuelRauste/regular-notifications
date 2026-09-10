@@ -60,6 +60,10 @@ class ReminderService(
     ): RepositoryActionResult {
         val result = repository.updateReminder(id, input, zoneId, now)
         if (result == RepositoryActionResult.APPLIED) {
+            // Any action PendingIntent from the old presentation is stale once
+            // the definition version changes. Remove both visible kinds and
+            // their old alarms before rebuilding only the Room-current state.
+            scheduler.cancelAll(id)
             scheduler.reconcileReminder(id, now, zoneId)
         }
         return result

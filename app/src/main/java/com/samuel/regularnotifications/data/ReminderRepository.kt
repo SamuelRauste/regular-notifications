@@ -146,37 +146,11 @@ class ReminderRepository(
         val masterEnabled = ensureMasterEnabled()
         val existing = reminderDao.getById(id) ?: return@withTransaction RepositoryActionResult.NOT_FOUND
         val definition = input.toDefinition(id = id)
-        val nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId)
-        reminderDao.update(
-            definition.toEntity(
-                id = id,
-                nextNormal = nextNormal,
-                createdAtEpochMillis = existing.createdAtEpochMillis,
-                modifiedAtEpochMillis = nextModifiedAt(existing, now),
-                zoneId = zoneId,
-            ),
-        )
-        outstandingDueDao.deleteByReminderId(id)
-        tomorrowPreviewDao.deleteByReminderId(id)
-
-        // The editor can also re-enable a reminder. Its edited schedule is a
-        // new definition, so use a fresh cursor while skipping any occurrences
-        // already past rather than recovering them as enabled missed work.
-        if (!existing.enabled && input.enabled) {
-            val skipped = ReminderStateMachine.skipInactiveOccurrences(
-                definition = definition,
-                current = ReminderScheduleState(
-                    nextNormal = nextNormal,
-                    outstandingDue = null,
-                    tomorrowPreview = null,
-                    lastResolvedNormalOccurrenceIndex = null,
-                ),
-                now = now,
-                zoneId = zoneId,
-            )
-            persistSchedule(requireNotNull(reminderDao.getById(id)), skipped, now, zoneId)
+        if (existing.scheduleDefinitionChanged(definition)) {
+            replaceScheduleForEdit(existing, definition, masterEnabled, now, zoneId)
+        } else {
+            updateUnchangedSchedule(existing, definition, masterEnabled, now, zoneId)
         }
-        reconcileStored(requireNotNull(reminderDao.getById(id)), now, zoneId, masterEnabled)
         RepositoryActionResult.APPLIED
     }
 
@@ -459,6 +433,94 @@ class ReminderRepository(
         return state
     }
 
+    /**
+     * A title/description edit keeps the logical schedule state intact. An
+     * enabled-state change uses the same skip/resume transition as the direct
+     * list switch, while retaining the unchanged schedule definition.
+     */
+    private suspend fun updateUnchangedSchedule(
+        existing: ReminderEntity,
+        definition: ReminderDefinition,
+        masterEnabled: Boolean,
+        now: Instant,
+        zoneId: ZoneId,
+    ) {
+        val updated = existing.copy(
+            title = definition.title,
+            description = definition.description,
+            enabled = definition.enabled,
+            modifiedAtEpochMillis = nextModifiedAt(existing, now),
+        )
+        reminderDao.update(updated)
+
+        if (existing.enabled == definition.enabled) {
+            // Preserve the cursor and persisted DUE/TOMORROW rows. Reconcile
+            // only discards state that is no longer logically current.
+            reconcileStored(updated, now, zoneId, masterEnabled)
+            return
+        }
+
+        val skipped = ReminderStateMachine.skipInactiveOccurrences(
+            definition = definition,
+            current = loadState(existing),
+            now = now,
+            zoneId = zoneId,
+        )
+        persistSchedule(updated, skipped, now, zoneId)
+
+        if (definition.enabled) {
+            // Re-enable through the editor follows the direct switch rule:
+            // never recover a disabled-period backlog.
+            reconcileStored(requireNotNull(reminderDao.getById(existing.id)), now, zoneId, masterEnabled)
+        }
+    }
+
+    /**
+     * A new anchor or interval creates a new logical occurrence sequence, so
+     * the old cursor and derived DUE/TOMORROW rows are deliberately not reused.
+     * Past occurrences on the replacement schedule are skipped without history
+     * so editing does not manufacture an overdue backlog.
+     */
+    private suspend fun replaceScheduleForEdit(
+        existing: ReminderEntity,
+        definition: ReminderDefinition,
+        masterEnabled: Boolean,
+        now: Instant,
+        zoneId: ZoneId,
+    ) {
+        val nextNormal = RecurrenceCalculator.firstFuture(definition, now, zoneId)
+        val replacement = definition.toEntity(
+            id = existing.id,
+            nextNormal = nextNormal,
+            createdAtEpochMillis = existing.createdAtEpochMillis,
+            modifiedAtEpochMillis = nextModifiedAt(existing, now),
+            zoneId = zoneId,
+            lastResolvedNormalOccurrenceIndex = null,
+        )
+        reminderDao.update(replacement)
+        outstandingDueDao.deleteByReminderId(existing.id)
+        tomorrowPreviewDao.deleteByReminderId(existing.id)
+
+        val skippedReplacementPast = ReminderStateMachine.skipInactiveOccurrences(
+            definition = definition,
+            current = ReminderScheduleState(
+                nextNormal = nextNormal,
+                outstandingDue = null,
+                tomorrowPreview = null,
+                lastResolvedNormalOccurrenceIndex = null,
+            ),
+            now = now,
+            zoneId = zoneId,
+        )
+        persistSchedule(replacement, skippedReplacementPast, now, zoneId)
+        reconcileStored(
+            requireNotNull(reminderDao.getById(existing.id)),
+            now,
+            zoneId,
+            masterEnabled,
+        )
+    }
+
     private suspend fun ensureMasterEnabled(): Boolean {
         val current = appSettingsDao.get()
         if (current != null) return current.masterEnabled
@@ -575,6 +637,11 @@ private fun ReminderEntity.toDefinition(): ReminderDefinition =
         anchorLocalTime = java.time.LocalTime.parse(anchorLocalTime),
         intervalDays = intervalDays,
     )
+
+private fun ReminderEntity.scheduleDefinitionChanged(definition: ReminderDefinition): Boolean =
+    anchorLocalDate != definition.anchorLocalDate.toString() ||
+        anchorLocalTime != definition.anchorLocalTime.toString() ||
+        intervalDays != definition.intervalDays
 
 private fun OutstandingDueEntity.toDomain() =
     com.samuel.regularnotifications.domain.OutstandingDueState(

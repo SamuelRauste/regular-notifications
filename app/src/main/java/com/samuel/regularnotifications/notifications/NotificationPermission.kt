@@ -81,9 +81,13 @@ fun rememberNotificationPermissionController(
     }
 
     val required = notificationPermissionRequired(Build.VERSION.SDK_INT)
-    val shouldShowRationale = activity?.shouldShowRequestPermissionRationale(
-        Manifest.permission.POST_NOTIFICATIONS,
-    ) == true
+    val shouldShowRationale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        activity?.shouldShowRequestPermissionRationale(
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == true
+    } else {
+        false
+    }
     val action = notificationPermissionAction(
         required = required,
         granted = permissionGranted,
@@ -114,7 +118,9 @@ fun rememberNotificationPermissionController(
         NotificationPermissionAction.REQUEST -> ({
             requestAlreadyPresented = true
             preferences.edit().putBoolean(REQUEST_PRESENTED_KEY, true).apply()
-            activity?.let { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                activity?.let { launcher.launch(Manifest.permission.POST_NOTIFICATIONS) }
+            }
         })
 
         NotificationPermissionAction.OPEN_SETTINGS -> ({
@@ -134,7 +140,7 @@ fun rememberNotificationPermissionController(
 }
 
 private fun hasNotificationPermission(context: Context): Boolean {
-    if (!notificationPermissionRequired(Build.VERSION.SDK_INT)) return true
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
     return context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
         PackageManager.PERMISSION_GRANTED
 }

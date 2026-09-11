@@ -47,17 +47,6 @@ Build and install the debug app:
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The optional debug-only notification presentation receiver can be used to
-check the notification channel and visual action layout without creating a
-Room reminder or scheduling an alarm. It is excluded from release builds:
-
-```powershell
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_DUE --el reminderId 42 --es title "Take out trash" --es description "Bins by the door"
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_TOMORROW --el reminderId 42 --ei intervalDays 7 --es title "Take out trash"
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.CANCEL_DUE --el reminderId 42
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.CANCEL_TOMORROW --el reminderId 42
-```
-
 For release verification, run:
 
 ```powershell

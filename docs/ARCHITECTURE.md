@@ -401,7 +401,8 @@ cancels all derived state. DUE delete intents map to Dismiss and TOMORROW delete
 intents map to Seen, which gives notification swipes the same recorded meaning
 where Android delivers the delete intent.
 
-The manifest declares `POST_NOTIFICATIONS` and `SCHEDULE_EXACT_ALARM`. On
+The manifest declares only `POST_NOTIFICATIONS`, `RECEIVE_BOOT_COMPLETED`, and
+`SCHEDULE_EXACT_ALARM`. On
 Android 13 and newer, the list screen shows a small user-initiated notification
 permission banner. On Android 12 and newer, it independently shows the
 exact-alarm access banner when needed. The first notification tap requests
@@ -411,12 +412,10 @@ button opens the special-access screen and is never launched automatically.
 Older Android versions do not show the relevant banner, and neither permission
 blocks reminder CRUD.
 
-The debug variant includes a temporary exported `adb` receiver that posts or
-cancels sample DUE/TOMORROW notifications. It is not part of release builds
-and does not schedule alarms. Notification body taps use a stable immutable
-activity PendingIntent to open the existing main reminder list. Debug sample
-notifications exercise presentation only; production notifications use the
-Room-backed action processor above.
+Notification body taps use a stable immutable activity PendingIntent to open the
+existing main reminder list. Production notifications use the Room-backed
+action processor above; there is no exported debug notification receiver in
+either build variant.
 
 ## Reliability and privacy
 
@@ -433,6 +432,13 @@ or description text. Android can still delay alarms, including exact alarms,
 and can suppress alarms and receivers after an explicit Force Stop until the
 app is opened again. The app does not attempt to bypass that platform behavior;
 it is documented and manually tested.
+
+Reminder definitions and History are local to this app installation. The
+manifest keeps `android:allowBackup="false"` and also names explicit legacy
+full-backup and Android 12+ data-extraction resources that exclude the app
+root from both cloud backup and device transfer. This makes the local-only
+policy explicit across supported Android versions rather than relying only on
+the deprecated general backup attribute.
 
 The primary user experience is intentionally low-friction: one main reminder
 list, a prominent add action, direct enable/edit/delete controls, sensible
@@ -461,5 +467,6 @@ reconciliation. Phase 6 adds AndroidX coverage for reactive global history,
 current-title joins, delete cascades, friendly action/postponement display,
 pause/recovery silence, missed-occurrence collapse, postponed reconstruction,
 preview recovery, time-zone changes, and idempotent reconciliation. The
-Android-test APK is compile-verified; connected execution still requires an
-authorized phone or emulator.
+Android-test APK is compile-verified. Phase 7 recorded 60/60 connected tests
+passing on the user's unlocked Samsung SM-S931B; the separate physical manual
+QA checklist remains intentionally incomplete.

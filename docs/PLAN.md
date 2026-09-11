@@ -42,7 +42,7 @@ are marked complete only after the relevant checks have been run.
 - [x] Ensure every-1-day reminders never create a Tomorrow notification.
 - [x] Request `POST_NOTIFICATIONS` on supported Android versions through a user-initiated, non-blocking UI action.
 - [x] Handle denied permission without breaking reminder management.
-- [x] Add a debug-only adb notification path, then cover notification presentation, identity, permission policy, and PendingIntent contracts with tests and documentation.
+- [x] Cover notification presentation, identity, permission policy, and PendingIntent contracts with tests and documentation.
 
 ## Phase 4 — Alarm scheduling and delivery
 
@@ -204,10 +204,10 @@ Phase 6 decisions:
 
 ## Phase 8 — Final review
 
-- [ ] Review privacy, permissions, accessibility, scheduling identifiers, logging, and error handling.
-- [ ] Remove temporary/debug-only features.
-- [ ] Re-run relevant checks and inspect the final diff.
-- [ ] Make the final focused local commit when requested/appropriate.
+- [x] Review privacy, permissions, accessibility, scheduling identifiers, logging, and error handling.
+- [x] Remove the temporary debug-only notification receiver and reconcile its documentation.
+- [x] Re-run relevant checks and inspect the final diff.
+- [x] Make the final focused local commit.
 
 ## Decisions recorded
 
@@ -244,7 +244,7 @@ Phase 6 decisions:
 - Disabled reminder cards show `Every X days · Paused` instead of a cached `Next:` date. Edit, delete, and enable/disable controls include the reminder title in their accessibility semantics while keeping the visible labels short.
 - Phase 3 uses one `Reminders` notification channel. DUE has `Done`, `Dismiss`, and `+1 day`; TOMORROW has only `Seen`; Every 1 day never builds TOMORROW.
 - NotificationManager identity is `(tag containing full reminder ID and kind, stable small kind ID)`, so notification tags prevent 64-bit-to-32-bit ID collisions. Action PendingIntents carry reminder ID, kind, action, and expected revision, use stable data/request identity, and are immutable.
-- `POST_NOTIFICATIONS` is requested only after the user taps the permission banner on Android 13+; denied permission leaves CRUD usable and can link to app notification settings. The debug-only adb receiver exercises notifications before Phase 4.
+- `POST_NOTIFICATIONS` is requested only after the user taps the permission banner on Android 13+; denied permission leaves CRUD usable and can link to app notification settings.
 - Phase 3 does not schedule alarms or mutate Room from notification actions. AlarmManager delivery is Phase 4; Done, Dismiss, +1 day, Seen, and swipe-action processing are Phase 5.
 - The exact-alarm corrective pass uses `AlarmManager.setExactAndAllowWhileIdle(RTC_WAKEUP, ...)` for both DUE and TOMORROW when permitted, and `setAndAllowWhileIdle(RTC_WAKEUP, ...)` otherwise. It uses `SCHEDULE_EXACT_ALARM`, not `USE_EXACT_ALARM`, and does not use WorkManager as the primary timer.
 - `ReminderService` coordinates CRUD with `ReminderScheduler`; the repository stays Android-free. The application container owns one scheduler and one Room repository, and startup plus narrow boot/time/time-zone receivers reconcile all rows.
@@ -340,15 +340,16 @@ The post-Phase-5 `+1 day` wall-clock corrective pass passed `test`, `lint`,
 for late, repeated, overdue, and daylight-saving postponement behavior on a
 real device.
 
-Phase 6 verification passed `test`, `lint`, `assembleDebug`, and
-`assembleAndroidTest` after adding the repository-backed History destination,
-recovery tests, and package-update recovery action. Connected instrumentation
-was not run because a usable authorized phone or emulator is not available;
-`adb devices` must be checked before any future connected run. Physical testing
-remains required for notification permission variants, app-open/closed and
-lock-screen delivery, simultaneous reminders, notification swipes, editing and
-deletion of scheduled reminders, reboot, time-zone/DST behavior, battery saver,
-postponed recovery, and package-update recovery.
+At the Phase 6 checkpoint, verification passed `test`, `lint`, `assembleDebug`,
+and `assembleAndroidTest` after adding the repository-backed History
+destination, recovery tests, and package-update recovery action. Connected
+instrumentation was not run at that checkpoint because a usable authorized
+phone or emulator was not available. The later Phase 7 record below supersedes
+that checkpoint for current connected-test status. Physical testing remains
+required for notification permission variants, app-open/closed and lock-screen
+delivery, simultaneous reminders, notification swipes, editing and deletion of
+scheduled reminders, reboot, time-zone/DST behavior, battery saver, postponed
+recovery, and package-update recovery.
 
 ## Phase 7 verification record
 
@@ -385,24 +386,68 @@ The user-supplied external result is separate from the agent result:
   app`; this is documented as a Compose/device-lock test-environment issue,
   not an application failure.
 
-Lint review found no errors. The 25 warnings are understood and were not
-blanket-suppressed: guarded API-33 notification permission constants, available
-newer dependency versions, KTX modernization suggestions, a redundant API-26
-check, Compose parameter ordering, the intentionally adb-accessible debug-only
-receiver, the missing explicit launcher icon, and the `allowBackup=false`
-data-extraction guidance. The debug receiver is excluded from release. The
-backup choice remains intentionally local-only; adding data-extraction rules,
-adding a launcher icon, and general warning cleanup are recorded as Phase 8
-follow-ups rather than expanding this verification phase.
+Lint review found no errors. The Phase 7 report had 25 warnings. Phase 8 fixed
+the concrete final-quality findings: guarded API-33 notification permission
+access, the redundant API-26 channel check, Compose modifier ordering, the
+missing launcher icon, the backup/data-extraction declaration, and the
+temporary exported debug receiver. The final report has 17 warnings, all
+understood: one toolchain version suggestion, seven dependency-version
+suggestions, and nine KTX `toUri`/`SharedPreferences.edit` modernization
+suggestions. No warning category was blanket-suppressed; the two API-26 base
+adaptive-icon resources use a narrowly scoped `MonochromeLauncherIcon`
+annotation because the API-33 resource overlay supplies the monochrome layer.
 
 Manifest verification found only `POST_NOTIFICATIONS`,
 `RECEIVE_BOOT_COMPLETED`, and `SCHEDULE_EXACT_ALARM`; there is no `INTERNET` or
-`USE_EXACT_ALARM`. The production receivers are not exported; the debug-only
-notification receiver is explicitly exported solely for its documented local
-adb test commands.
+`USE_EXACT_ALARM`. The launcher activity is the only exported application
+component; the notification, alarm, and recovery receivers are not exported.
 
 No production behavior, Room schema, recurrence calculation, notification
 action semantics, global pause semantics, or `+1 day` semantics changed in
 Phase 7. The full physical checklist in `docs/MANUAL_TESTING.md` remains
 pending, including reboot, clock/time-zone/DST, battery saver/Doze, package
 update, permission combinations, swipe/action combinations, and Force Stop.
+
+## Phase 8 verification record
+
+The final review searched the full repository and found no network client,
+analytics/telemetry SDK, advertising, account, cloud-sync, remote-logging, or
+user-text logging. Production diagnostic logs contain only operation types,
+reminder IDs, notification kinds, actions, platform conditions, and exception
+details where useful; titles and descriptions are not logged.
+
+The production manifest still requests only `POST_NOTIFICATIONS`,
+`RECEIVE_BOOT_COMPLETED`, and `SCHEDULE_EXACT_ALARM`. The merged release
+manifest has only the launcher activity exported from this app; the action,
+alarm, and recovery receivers are non-exported. AndroidX supplies its own
+non-exported startup/provider/service components and a profile receiver guarded
+by the `DUMP` signature permission. The debug and release merged manifests
+contain no temporary notification receiver.
+
+The temporary `DebugNotificationReceiver`, its debug manifest, and its adb
+documentation were removed. Production notification factory, action, alarm,
+and instrumentation tests remain. Accessibility review found existing
+reminder-specific semantics and standard controls across the list, editor,
+History, banners, dialogs, and navigation; Phase 8 also fixed the list screen's
+modifier parameter ordering. No visual redesign or duplicate test suite was
+needed.
+
+The alarm, notification, action, and content PendingIntent identity scheme was
+reviewed and left unchanged because it already uses explicit immutable intents,
+full reminder IDs in logical identity, distinct DUE/TOMORROW kinds, and strict
+revision/token validation. Receiver lifecycle, Room transactions, persisted
+cursors, stale-state checks, error handling, and idempotent reconciliation were
+reviewed without finding a correctness bug requiring redesign. The Room schema
+was not changed.
+
+The local-only backup decision is now explicit: `allowBackup="false"` remains,
+`fullBackupContent` excludes the root for legacy backup behavior, and
+`dataExtractionRules` excludes the root from both cloud backup and device
+transfer. A simple adaptive bell launcher icon with an API-33 monochrome
+overlay is configured through `android:icon` and `android:roundIcon`.
+
+README, ARCHITECTURE, PLAN, and MANUAL_TESTING now describe the final current
+state consistently. The full physical QA checklist remains intentionally
+unchecked. The project status is implementation and automated verification
+complete, with documented real-device manual QA still pending; it is not a
+claim of production readiness.

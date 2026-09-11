@@ -9,13 +9,13 @@ advertisements, or network access.
 
 ## Status
 
-Phase 6 implementation is complete, with corrective passes for global pause,
-notification-permission recovery, exact-alarm scheduling, edit semantics, and
-recovery/history. Phase 7 verification and documentation are complete. The
-JVM tests, lint, debug APK/test APK, release APK compilation, and release AAB
-compilation pass. The user also ran all 60 connected instrumentation tests on
-the physical Samsung SM-S931B while it was unlocked. The full physical
-recovery and timing checklist remains pending; see
+Implementation, Phase 7 verification, and Phase 8 final review are complete.
+The final cleanup removes the temporary debug notification receiver, adds an
+explicit adaptive launcher icon, and makes the local-only backup policy
+explicit. The JVM tests, lint, debug APK/test APK, release APK compilation,
+and release AAB compilation pass. The user also ran all 60 connected
+instrumentation tests on the physical Samsung SM-S931B while it was unlocked.
+The full physical recovery and timing checklist remains pending; see
 `docs/MANUAL_TESTING.md`.
 
 ## Prerequisites
@@ -171,25 +171,6 @@ Create, edit, delete, pause, resume, and recovery operations do not create
 history rows. Recovery also listens for app package replacement so disposable
 alarms can be reconstructed after an update.
 
-## Inspect Phase 3 notifications
-
-The debug APK contains a temporary, non-production `adb` broadcast receiver.
-It exercises the factory without AlarmManager scheduling:
-
-```powershell
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_DUE --el reminderId 42 --es title "Take out trash" --es description "Bins by the door"
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.SHOW_TOMORROW --el reminderId 42 --ei intervalDays 7 --es title "Take out trash"
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.CANCEL_DUE --el reminderId 42
-adb shell am broadcast -n com.samuel.regularnotifications/.notifications.DebugNotificationReceiver -a com.samuel.regularnotifications.debug.CANCEL_TOMORROW --el reminderId 42
-```
-
-Repeating a SHOW command with the same reminder ID replaces the same logical
-notification. The debug receiver is excluded from release builds. These
-commands inspect notification presentation only: they do not create a Room
-reminder or schedule future alarms, so their sample action buttons are not an
-end-to-end action test. Normal app reminders use the Room-backed action
-processor and scheduler.
-
 ## Run on a physical phone
 
 With USB debugging enabled and the phone connected:
@@ -218,6 +199,9 @@ and time-zone changes. Android may delay alarms, especially in battery saver or
 doze modes. If the user explicitly force-stops the app from Android system
 settings, Android may suppress its alarms and broadcast receivers until the app
 is opened again. The app does not attempt to bypass that platform limitation.
+Reminder definitions and History remain local to this app installation. Android
+cloud backup and device-transfer extraction are disabled by the manifest and
+its explicit backup rules.
 
 ## Documentation
 

@@ -435,8 +435,8 @@ it is documented and manually tested.
 
 Reminder definitions and History are local to this app installation. The
 manifest keeps `android:allowBackup="false"` and also names explicit legacy
-full-backup and Android 12+ data-extraction resources that exclude the app
-root from both cloud backup and device transfer. This makes the local-only
+full-backup and Android 12+ data-extraction resources that exclude every
+applicable backup domain from both cloud backup and device transfer. This makes the local-only
 policy explicit across supported Android versions rather than relying only on
 the deprecated general backup attribute.
 

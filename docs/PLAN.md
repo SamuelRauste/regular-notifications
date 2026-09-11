@@ -441,9 +441,9 @@ reviewed without finding a correctness bug requiring redesign. The Room schema
 was not changed.
 
 The local-only backup decision is now explicit: `allowBackup="false"` remains,
-`fullBackupContent` excludes the root for legacy backup behavior, and
-`dataExtractionRules` excludes the root from both cloud backup and device
-transfer. A simple adaptive bell launcher icon with an API-33 monochrome
+`fullBackupContent` excludes every applicable backup domain for legacy backup
+behavior, and `dataExtractionRules` repeats those exclusions under both
+cloud-backup and device-transfer. A simple adaptive bell launcher icon with an API-33 monochrome
 overlay is configured through `android:icon` and `android:roundIcon`.
 
 README, ARCHITECTURE, PLAN, and MANUAL_TESTING now describe the final current

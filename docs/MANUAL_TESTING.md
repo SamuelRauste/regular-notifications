@@ -186,6 +186,44 @@ delivery.
   the individual reminder is disabled. Verify no notification or alarm appears
   until the appropriate delivery control is re-enabled.
 
+## Phase 6 recovery and history
+
+- [ ] With no events, open `History` from the Reminders top bar and verify the
+  empty explanation, an accessible Back action, and return to Reminders.
+- [ ] Perform Done, Dismiss, +1 day, and Tomorrow Seen on real reminders. Open
+  History and verify each appears newest first with a friendly label rather
+  than a database action name.
+- [ ] For +1 day, verify History shows both the action time and the new
+  reminder time. Confirm the postponement changes only that displayed
+  occurrence: its recurrence anchor, interval, and normal schedule remain
+  unchanged.
+- [ ] Rename a reminder after it has history. Verify older History entries
+  reactively show the current title. Delete the reminder and confirm its
+  history disappears with it after the confirmation prompt.
+- [ ] Verify History has understandable loading, populated, empty, and error/
+  retry behavior. Check that cards and Back/History actions have useful screen
+  reader labels and touch targets.
+- [ ] Grant notification permission, create a due reminder, close the app, and
+  verify delivery/action history. Repeat with notification permission denied;
+  CRUD and History must remain usable, and no fake history may be created.
+- [ ] Repeat a due reminder with the app open, closed/removed from Recents, and
+  the screen locked. Trigger multiple reminders together and verify each
+  history row remains associated with the correct title and action.
+- [ ] Let one or several occurrences pass while the process is stopped. Open
+  or recover the app and verify there is at most one current due notification
+  per reminder, no notification storm, and no synthetic recovery history.
+- [ ] Reboot the phone and verify enabled reminders are reconstructed from
+  Room. Verify individually disabled and globally paused reminders stay quiet,
+  and resuming either state skips the inactive-period backlog without history.
+- [ ] Change the clock forward and backward and change the time zone. Verify
+  local wall-clock schedules, resolved occurrences, current/acknowledged
+  Tomorrow previews, and postponed due state are not resurrected or duplicated.
+- [ ] Install an updated debug APK over the existing installation and verify
+  startup/package-update recovery rebuilds the same alarms without duplicates.
+- [ ] Repeat the recovery checks with battery saver/Doze enabled and record
+  any Android timing delay. Exact-alarm access, notification permission, and
+  app force-stop behavior remain separate platform conditions.
+
 ## Reminder lifecycle
 
 - [ ] Open the app with no reminders and verify the empty state and both Add actions are obvious.

@@ -51,6 +51,9 @@ class ReminderRepository(
     fun observeEvents(reminderId: Long): Flow<List<ReminderEventEntity>> =
         eventDao.observeForReminder(reminderId)
 
+    /** Observes the complete local event history in newest-first order. */
+    fun observeAllEvents(): Flow<List<ReminderEventEntity>> = eventDao.observeAll()
+
     suspend fun getMasterEnabled(): Boolean = database.withTransaction {
         ensureMasterEnabled()
     }

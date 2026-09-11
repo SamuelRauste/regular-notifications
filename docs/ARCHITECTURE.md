@@ -32,7 +32,8 @@ Phase 2 adds the Compose reminder-management UI on top of the persisted,
 pure-Kotlin recurrence/state model. Phase 3 adds notification presentation,
 permission UX, and action contracts. Phase 4 adds Room-derived AlarmManager
 scheduling and delivery. Phase 5 adds Room-backed notification action
-processing and notification-swipe handling. A history screen remains Phase 6.
+processing and notification-swipe handling. Phase 6 adds the read-only,
+repository-backed global history destination and completes recovery coverage.
 
 ## Planned packages
 
@@ -41,7 +42,8 @@ processing and notification-swipe handling. A history screen remains Phase 6.
 - `scheduling`: `ReminderScheduler`, the `AlarmManager` implementation, and
   alarm/recovery receivers.
 - `notifications`: channel, notification factory, and action handling.
-- `ui`: reminder list/editor models, ViewModels, screens, and Compose navigation.
+- `ui`: reminder list/editor/history models, ViewModels, screens, and Compose
+  navigation.
 
 `RegularNotificationsApplication` owns one lazy `AppContainer` per app
 process. The container owns the Room database and repository. Future UI,
@@ -51,9 +53,10 @@ container instead of opening their own Room database instances.
 The UI maps Room entities to small presentation models before rendering. A
 list ViewModel owns the `StateFlow` for loading, content, and errors. A separate
 editor ViewModel owns the short form and its validation state. Navigation has
-only two destinations: the reminder list and a create/edit editor. Popping the
-editor after Save or Cancel clears its destination-scoped ViewModel, preventing
-stale form state on a later edit.
+three destinations: the reminder list, a create/edit editor, and global
+history. Popping the editor after Save or Cancel clears its destination-scoped
+ViewModel, preventing stale form state on a later edit. History is read-only
+and has its own destination-scoped ViewModel.
 
 ## Reminder and recurrence decisions
 
@@ -185,6 +188,49 @@ normal due state. A same-target preview retains its revision only when its
 occurrence instant, preview instant, and zone are unchanged; any of those
 scheduling changes increments the revision.
 
+## History and audit trail
+
+History is a global read-only destination reached from the Reminders top app
+bar. Its data flow is deliberately small:
+
+```text
+Room reminder_events + reminders
+              |
+      ReminderRepository
+              |
+       HistoryViewModel
+       (combine + map)
+              |
+        HistoryScreen
+```
+
+`ReminderEventDao.observeAll()` already orders events by `occurredAt` descending
+and then event ID descending. `ReminderRepository.observeAllEvents()` exposes
+that Flow without giving Compose direct DAO access. `HistoryViewModel` joins
+each event to the current reminder row and maps storage action strings to the
+friendly labels Done, Dismissed, Postponed, and Tomorrow preview seen. An
+unknown stored action is displayed as a neutral Activity label rather than
+leaking a database enum name.
+
+The join intentionally uses the current reminder title, not a title snapshot
+in the event row. A title edit therefore updates older history entries
+reactively. Reminder deletion remains permanent: the existing Room foreign-key
+cascade deletes its event rows, so those entries disappear from History without
+an additional schema table or migration. History never adds rows for create,
+edit, delete, pause, resume, recovery, or stale notifications.
+
+Event timestamps are persisted Instants. The Compose screen formats them with
+Android's locale-aware date and time formatters, which follow the device's
+current time zone and 12/24-hour preference. A postponed event shows both its
+action time and its persisted new reminder time; it does not imply that the
+normal recurrence was moved. The existing `+1 day` rule remains unchanged:
+only the displayed occurrence is postponed, while the recurrence anchor and
+normal schedule stay canonical.
+
+The screen has explicit loading, empty, error/retry, and populated states. A
+back action returns to the Reminders destination, and cards expose reminder
+title/action semantics for accessibility.
+
 ## Phase 2 user interface
 
 The main screen is one direct list. A card shows a reminder's title, optional
@@ -262,13 +308,15 @@ identity.
 `AlarmDeliveryReceiver` and `SchedulingRecoveryReceiver` call `goAsync()` and
 run short Room/scheduling work on the application scope. Every path calls
 `PendingResult.finish()`, including failures. The recovery receiver handles
-`BOOT_COMPLETED`, `TIME_SET`, `TIMEZONE_CHANGED`, and
+`BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIME_SET`, `TIMEZONE_CHANGED`, and
 `ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED`; it re-checks the
-capability before reconciling. Application startup and list-screen resume also
-reconcile when appropriate. Reconciliation recalculates local-wall-clock
-occurrences in the current zone, so a 09:00 reminder remains 09:00 after travel
-and old alarm trigger times are replaced. Deleted or disabled reminders are
-safe when a previously delivered alarm races with the database change.
+capability before reconciling. `MY_PACKAGE_REPLACED` covers an app update,
+which can invalidate disposable alarms, through the same Room-derived rebuild
+path. Application startup and list-screen resume also reconcile when
+appropriate. Reconciliation recalculates local-wall-clock occurrences in the
+current zone, so a 09:00 reminder remains 09:00 after travel and old alarm
+trigger times are replaced. Deleted or disabled reminders are safe when a
+previously delivered alarm races with the database change.
 
 ## Global delivery switch and permission recovery
 
@@ -409,4 +457,9 @@ path. Scheduling tests verify stable identifiers, cancellation/reschedule
 behavior, editing, deletion, and missed-occurrence handling. Action tests verify
 strict PendingIntent parsing, Done, Dismiss, postponement, Tomorrow Seen,
 duplicate or stale actions, token protection after edits, event recording, and
-reconciliation.
+reconciliation. Phase 6 adds AndroidX coverage for reactive global history,
+current-title joins, delete cascades, friendly action/postponement display,
+pause/recovery silence, missed-occurrence collapse, postponed reconstruction,
+preview recovery, time-zone changes, and idempotent reconciliation. The
+Android-test APK is compile-verified; connected execution still requires an
+authorized phone or emulator.

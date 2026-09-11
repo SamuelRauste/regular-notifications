@@ -9,16 +9,17 @@ advertisements, or network access.
 
 ## Status
 
-Phase 5 is complete, with corrective passes for global pause,
-notification-permission recovery, exact-alarm scheduling, and edit semantics.
-Enabled reminders
-use Room-derived, one-shot AlarmManager scheduling, alarm delivery, startup
-reconciliation, and boot/clock/time-zone recovery. The app can create, view,
-edit, enable, disable, and permanently delete local reminders through a short
-Compose/Material 3 interface. Done, Dismiss, +1 day, Tomorrow Seen, and
-notification-swipe handling record actions in Room and reconcile the next
-schedule. Android instrumentation tests compile but still need a usable phone
-or emulator to run.
+Phase 6 implementation is complete, with corrective passes for global pause,
+notification-permission recovery, exact-alarm scheduling, edit semantics, and
+recovery/history. Enabled reminders use Room-derived, one-shot AlarmManager
+scheduling, alarm delivery, startup/package-update reconciliation, and
+boot/clock/time-zone recovery. The app can create, view, edit, enable, disable,
+and permanently delete local reminders through a short Compose/Material 3
+interface. Done, Dismiss, +1 day, Tomorrow Seen, and notification-swipe
+handling record actions in Room and reconcile the next schedule. A global,
+read-only History screen shows those actions with current reminder titles.
+Android instrumentation tests compile but connected execution and physical
+recovery testing still need a usable phone or emulator.
 
 ## Prerequisites
 
@@ -120,6 +121,16 @@ visible-notification kinds. Notification action buttons update Room history,
 remove the corresponding visible notification, and reconcile the next derived
 schedule. A notification swipe maps to Dismiss for DUE and Seen for TOMORROW
 through the notification delete intent.
+
+The Reminders top bar opens a read-only History screen. It is backed by the
+Room `reminder_events` table through the repository and updates reactively.
+History shows Done, Dismissed, Postponed, and Tomorrow preview seen with local,
+locale-aware timestamps. A postponed entry shows both the action time and the
+new reminder time. History uses the current reminder title, so renaming updates
+older entries; deleting a reminder permanently removes its cascaded history.
+Create, edit, delete, pause, resume, and recovery operations do not create
+history rows. Recovery also listens for app package replacement so disposable
+alarms can be reconstructed after an update.
 
 ## Inspect Phase 3 notifications
 

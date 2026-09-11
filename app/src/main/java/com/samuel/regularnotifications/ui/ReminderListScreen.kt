@@ -53,6 +53,7 @@ fun ReminderListScreen(
     onDeleteReminder: (Long) -> Unit,
     onRetry: () -> Unit,
     onDismissError: () -> Unit,
+    onOpenHistory: () -> Unit = {},
     modifier: Modifier = Modifier,
     notificationPermission: NotificationPermissionPresentation = NotificationPermissionPresentation(),
     onNotificationPermissionAction: () -> Unit = {},
@@ -66,6 +67,16 @@ fun ReminderListScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Reminders") },
+                actions = {
+                    TextButton(
+                        onClick = onOpenHistory,
+                        modifier = Modifier.semantics {
+                            contentDescription = "Open history"
+                        },
+                    ) {
+                        Text("History")
+                    }
+                },
             )
         },
         floatingActionButton = {

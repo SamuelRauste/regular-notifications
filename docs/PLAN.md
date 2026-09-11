@@ -145,11 +145,42 @@ Implementation notes for this phase:
 
 ## Phase 6 — Recovery and history
 
-- [ ] Extend the Phase 4 lightweight boot/time/time-zone recovery with the remaining recovery/history behavior and physical-device validation.
-- [x] Reconstruct Phase 4 alarms from Room as the source of truth.
-- [ ] Add history screen/section and event display.
-- [ ] Handle process death and missed alarms without notification storms.
-- [ ] Add recovery and history tests.
+- [x] Extend the lightweight boot/time/time-zone recovery with package-update
+  recovery and retain one shared application-scoped reconciliation path.
+- [x] Reconstruct Phase 4 alarms from Room as the source of truth, including
+  process-death restart, missed-occurrence collapse, postponed state, preview
+  lifecycle, disabled/global-paused state, and time-zone recalculation.
+- [x] Add a global read-only History destination backed by a repository-wide
+  Room event Flow, with current reminder-title joins, friendly action labels,
+  local date/time formatting, postponed action/new-time details, and retry,
+  empty, loading, and error states.
+- [x] Keep deletion's existing Room foreign-key cascade so deleted reminders
+  remove their history without a schema change; title edits continue to show
+  the current title for older events.
+- [x] Handle process death and missed alarms without notification storms;
+  recovery records no synthetic history events.
+- [x] Add repository/ViewModel/Compose recovery and history tests. Android-test
+  APK compilation is verified; connected execution and physical-device
+  validation remain pending a usable authorized device.
+- [ ] Execute the physical recovery/history checklist on a real Android phone.
+
+Phase 6 decisions:
+
+- History is read-only and global. `HistoryViewModel` combines the repository's
+  ordered `reminder_events` Flow with current reminder rows, so renaming a
+  reminder changes the displayed title of older events and deleting a
+  reminder removes its cascaded history.
+- History displays Done, Dismissed, Postponed, and Tomorrow preview seen with
+  plain-language labels. Instants are formatted in the device's current local
+  time zone using the user's locale/time preference. Postponed rows show both
+  the action time and the new reminder time.
+- Recovery does not write history. It reconciles Room state into disposable
+  alarms and preserves the existing rule that `+1 day` postpones only the
+  displayed occurrence, without moving the recurrence anchor or normal
+  schedule.
+- `ACTION_MY_PACKAGE_REPLACED` uses the existing recovery receiver so an app
+  update can rebuild derived alarms from Room without adding a broad package
+  broadcast or a new persistence field.
 
 ## Phase 7 — Verification and documentation
 
@@ -295,3 +326,13 @@ The post-Phase-5 `+1 day` wall-clock corrective pass passed `test`, `lint`,
 `assembleDebug`, and `assembleAndroidTest`. Physical testing remains required
 for late, repeated, overdue, and daylight-saving postponement behavior on a
 real device.
+
+Phase 6 verification passed `test`, `lint`, `assembleDebug`, and
+`assembleAndroidTest` after adding the repository-backed History destination,
+recovery tests, and package-update recovery action. Connected instrumentation
+was not run because a usable authorized phone or emulator is not available;
+`adb devices` must be checked before any future connected run. Physical testing
+remains required for notification permission variants, app-open/closed and
+lock-screen delivery, simultaneous reminders, notification swipes, editing and
+deletion of scheduled reminders, reboot, time-zone/DST behavior, battery saver,
+postponed recovery, and package-update recovery.

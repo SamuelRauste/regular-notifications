@@ -9,7 +9,7 @@ import android.util.Log
 import com.samuel.regularnotifications.RegularNotificationsApplication
 import kotlinx.coroutines.launch
 
-/** Rebuilds disposable alarms after reboot or a wall-clock/time-zone change. */
+/** Rebuilds disposable alarms after lifecycle, clock, or package changes. */
 class SchedulingRecoveryReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action !in RECOVERY_ACTIONS) {
@@ -48,6 +48,7 @@ class SchedulingRecoveryReceiver : BroadcastReceiver() {
         const val TAG = "ReminderNotifications"
         val RECOVERY_ACTIONS = setOf(
             Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED,
             EXACT_ALARM_PERMISSION_STATE_CHANGED_ACTION,

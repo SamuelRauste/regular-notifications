@@ -115,4 +115,29 @@ class ReminderListScreenTest {
         composeRule.onNodeWithContentDescription("Resume all reminders").performClick()
         composeRule.runOnIdle { assertTrue(resumed) }
     }
+
+    @Test
+    fun historyActionIsVisibleAndAccessible() {
+        var historyTapped = false
+
+        composeRule.setContent {
+            MaterialTheme {
+                ReminderListScreen(
+                    uiState = ReminderListUiState(isLoading = false),
+                    onAddReminder = {},
+                    onEditReminder = {},
+                    onSetEnabled = { _, _ -> },
+                    onDeleteReminder = {},
+                    onRetry = {},
+                    onDismissError = {},
+                    onOpenHistory = { historyTapped = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithContentDescription("Open history")
+            .assertHasClickAction()
+            .performClick()
+        composeRule.runOnIdle { assertTrue(historyTapped) }
+    }
 }

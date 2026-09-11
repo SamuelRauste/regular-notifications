@@ -14,6 +14,7 @@ import com.samuel.regularnotifications.notifications.rememberNotificationPermiss
 
 private const val ReminderListRoute = "reminders"
 private const val ReminderEditorRoute = "editor/{reminderId}"
+private const val HistoryRoute = "history"
 
 @Composable
 fun RegularNotificationsApp(
@@ -53,10 +54,23 @@ fun RegularNotificationsApp(
                 onDeleteReminder = viewModel::delete,
                 onRetry = viewModel::retry,
                 onDismissError = viewModel::clearError,
+                onOpenHistory = { navController.navigate(HistoryRoute) },
                 notificationPermission = notificationPermission.presentation,
                 onNotificationPermissionAction = notificationPermission.onAction,
                 exactAlarmPermission = exactAlarmPermission.presentation,
                 onExactAlarmPermissionAction = exactAlarmPermission.onAction,
+            )
+        }
+        composable(HistoryRoute) {
+            val viewModel: HistoryViewModel = viewModel(
+                factory = HistoryViewModel.factory(appContainer.reminderRepository),
+            )
+            val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+            HistoryScreen(
+                uiState = uiState,
+                onBack = { navController.popBackStack() },
+                onRetry = viewModel::retry,
             )
         }
         composable(ReminderEditorRoute) { backStackEntry ->

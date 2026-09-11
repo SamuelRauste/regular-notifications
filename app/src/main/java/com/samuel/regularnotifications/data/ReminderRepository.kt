@@ -98,7 +98,16 @@ class ReminderRepository(
             }
         }
         appSettingsDao.upsert(AppSettingsEntity(masterEnabled = enabled))
-        reminders.forEach { reminder ->
+        // The inactive pass above may have advanced the persisted cursor and
+        // next-normal fields while the app was globally paused. Re-query
+        // before the active pass so it cannot rebuild state from the stale
+        // ReminderEntity objects captured before that mutation.
+        val remindersToReconcile = if (enabled && !wasMasterEnabled) {
+            reminderDao.getAll()
+        } else {
+            reminders
+        }
+        remindersToReconcile.forEach { reminder ->
             reconcileStored(
                 reminder = reminder,
                 now = now,

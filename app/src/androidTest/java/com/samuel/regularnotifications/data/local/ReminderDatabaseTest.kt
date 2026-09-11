@@ -65,7 +65,7 @@ class ReminderDatabaseTest {
         val replacedDue = database.outstandingDueDao().getByReminderId(reminderId)!!.copy(revision = 2)
         database.outstandingDueDao().upsert(replacedDue)
 
-        assertEquals(2, database.outstandingDueDao().getByReminderId(reminderId)?.revision)
+        assertEquals(2L, database.outstandingDueDao().getByReminderId(reminderId)?.revision)
         database.outstandingDueDao().deleteByReminderId(reminderId)
         database.tomorrowPreviewDao().upsert(
             TomorrowPreviewEntity(

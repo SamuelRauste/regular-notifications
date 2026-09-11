@@ -164,6 +164,19 @@ Implementation notes for this phase:
   validation remain pending a usable authorized device.
 - [ ] Execute the physical recovery/history checklist on a real Android phone.
 
+## Corrective pass after Phase 6 — fresh global-resume state
+
+- [x] Re-query reminder rows after the inactive global-resume reconciliation so
+  the active pass cannot reuse stale cursor/next-occurrence fields.
+- [x] Preserve global pause/resume semantics: missed occurrences are skipped
+  without history, individual enabled flags and anchors remain unchanged, and
+  valid future Tomorrow previews can be rebuilt.
+- [x] Correct the Room test assertion for the `Long` revision field and add
+  multi-reminder regression coverage for cursor advancement, disabled state,
+  future previews, no history, and idempotent repeated reconciliation.
+- [x] JVM tests, lint, debug APK, and Android-test APK checks pass. Connected
+  instrumentation was not run in this environment.
+
 Phase 6 decisions:
 
 - History is read-only and global. `HistoryViewModel` combines the repository's

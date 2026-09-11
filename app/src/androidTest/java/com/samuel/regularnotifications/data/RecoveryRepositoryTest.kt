@@ -13,6 +13,7 @@ import java.time.ZoneId
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -74,6 +75,89 @@ class RecoveryRepositoryTest {
             now = Instant.parse("2026-01-20T12:00:00Z"),
         )
         assertEquals(recovered, repeated)
+    }
+
+    @Test
+    fun globalResumeUsesFreshRowsForMultipleRemindersAndRebuildsFuturePreview() = runBlocking {
+        val pauseAt = Instant.parse("2026-01-01T10:00:00Z")
+        val resumeAt = Instant.parse("2026-01-20T10:00:00Z")
+        val missedIds = listOf(
+            repository.createReminder(
+                input("Missed early", LocalDateTime.of(2026, 1, 1, 9, 0), intervalDays = 7),
+                utc,
+                pauseAt,
+            ),
+            repository.createReminder(
+                input("Missed late", LocalDateTime.of(2026, 1, 1, 9, 0), intervalDays = 7),
+                utc,
+                pauseAt,
+            ),
+        )
+        val futureId = repository.createReminder(
+            input("Future preview", LocalDateTime.of(2026, 1, 30, 9, 0), intervalDays = 7),
+            utc,
+            pauseAt,
+        )
+        val disabledId = repository.createReminder(
+            input(
+                "Individually disabled",
+                LocalDateTime.of(2026, 1, 1, 9, 0),
+                intervalDays = 7,
+                enabled = false,
+            ),
+            utc,
+            pauseAt,
+        )
+        val anchorsBeforePause = database.reminderDao().getAll().associateBy { it.id }
+
+        repository.setMasterEnabled(enabled = false, zoneId = utc, now = pauseAt)
+        val recreatedRepository = ReminderRepository(database)
+        recreatedRepository.setMasterEnabled(enabled = true, zoneId = utc, now = resumeAt)
+
+        missedIds.forEach { reminderId ->
+            val stored = database.reminderDao().getById(reminderId)!!
+            assertTrue(stored.enabled)
+            assertEquals(2L, stored.lastResolvedNormalOccurrenceIndex)
+            assertEquals(3L, stored.nextNormalOccurrenceIndex)
+            assertEquals(
+                Instant.parse("2026-01-22T09:00:00Z").toEpochMilli(),
+                stored.nextNormalOccurrenceEpochMillis,
+            )
+            assertNull(database.outstandingDueDao().getByReminderId(reminderId))
+            assertTrue(database.reminderEventDao().getForReminder(reminderId).isEmpty())
+        }
+
+        val future = recreatedRepository.reconcileReminderForScheduling(
+            futureId,
+            zoneId = utc,
+            now = resumeAt,
+        )!!
+        assertNotNull(future.state.tomorrowPreview)
+        assertEquals(0L, future.state.tomorrowPreview?.normalOccurrenceIndex)
+        assertTrue(future.state.tomorrowPreview!!.previewEpochMillis > resumeAt.toEpochMilli())
+
+        val disabled = database.reminderDao().getById(disabledId)!!
+        assertFalse(disabled.enabled)
+        assertNull(database.outstandingDueDao().getByReminderId(disabledId))
+        assertTrue(database.reminderEventDao().getForReminder(disabledId).isEmpty())
+
+        anchorsBeforePause.forEach { (reminderId, before) ->
+            val after = database.reminderDao().getById(reminderId)!!
+            assertEquals(before.anchorLocalDate, after.anchorLocalDate)
+            assertEquals(before.anchorLocalTime, after.anchorLocalTime)
+        }
+
+        val beforeRepeat = recreatedRepository.reconcileAllForScheduling(
+            zoneId = utc,
+            now = resumeAt,
+        )
+        recreatedRepository.setMasterEnabled(enabled = true, zoneId = utc, now = resumeAt)
+        val afterRepeat = recreatedRepository.reconcileAllForScheduling(
+            zoneId = utc,
+            now = resumeAt,
+        )
+        assertEquals(beforeRepeat, afterRepeat)
+        assertTrue(database.reminderEventDao().getForReminder(futureId).isEmpty())
     }
 
     @Test
@@ -313,10 +397,11 @@ class RecoveryRepositoryTest {
         title: String,
         firstOccurrence: LocalDateTime,
         intervalDays: Int,
+        enabled: Boolean = true,
     ) = ReminderInput(
         title = title,
         description = null,
-        enabled = true,
+        enabled = enabled,
         firstOccurrence = firstOccurrence,
         intervalDays = intervalDays,
     )

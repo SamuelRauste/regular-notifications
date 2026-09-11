@@ -197,10 +197,10 @@ Phase 6 decisions:
 
 ## Phase 7 — Verification and documentation
 
-- [ ] Complete automated tests, lint, and debug build checks.
-- [ ] Add AndroidX instrumentation tests where they provide meaningful coverage.
-- [ ] Complete `docs/MANUAL_TESTING.md` for permissions, lifecycle, actions, reboot, time zones, battery saver, and DST.
-- [ ] Document release-build instructions without committing signing credentials.
+- [x] Audit and run the automated JVM, lint, debug, Android-test, and release build checks.
+- [x] Review AndroidX instrumentation coverage and add tests only where a meaningful stable gap exists; this audit found no such gap, so no duplicate tests were added.
+- [x] Reorganize `docs/MANUAL_TESTING.md` for permissions, lifecycle, actions, reboot, time zones, battery saver, DST, and the remaining physical-device checks.
+- [x] Document release APK/AAB commands and unsigned-output handling without committing signing credentials.
 
 ## Phase 8 — Final review
 
@@ -349,3 +349,60 @@ remains required for notification permission variants, app-open/closed and
 lock-screen delivery, simultaneous reminders, notification swipes, editing and
 deletion of scheduled reminders, reboot, time-zone/DST behavior, battery saver,
 postponed recovery, and package-update recovery.
+
+## Phase 7 verification record
+
+The existing test-suite audit found broad coverage and no meaningful stable gap
+that needed a new test. The 62 JVM test methods cover recurrence intervals,
+calendar boundaries, daylight-saving and time-zone behavior, anchoring and
+postponement, validation, state transitions, notification permission policy,
+scheduling policy, stable identities, and UI presentation models. The 60
+instrumentation test methods cover Room/database behavior, repository and
+recovery flows, notification contracts and processing, PendingIntent behavior,
+and Compose/ViewModel screens including History. No tests were added in Phase 7
+because another copy of these cases would not improve confidence.
+
+Agent-side verification completed from the repository root:
+
+- `./gradlew.bat test` - PASS.
+- `./gradlew.bat lint` - PASS; the report contains 0 errors and 25 warnings.
+- `./gradlew.bat assembleDebug` - PASS.
+- `./gradlew.bat assembleAndroidTest` - PASS.
+- `./gradlew.bat testDebugUnitTest` - PASS. This is the same debug JVM suite
+  reached by `test`, so it is a named/redundant confirmation rather than a
+  separate set of tests.
+- `./gradlew.bat assembleRelease` - PASS; produced an unsigned release APK.
+- `./gradlew.bat bundleRelease` - PASS; produced an unsigned release AAB.
+- `adb devices` - FAIL before device enumeration because adb could not create
+  its Android user directory (`Permission denied`). `connectedDebugAndroidTest`
+  was therefore not run by the agent.
+
+The user-supplied external result is separate from the agent result:
+
+- Physical Samsung SM-S931B: `connectedDebugAndroidTest` passed 60/60 while
+  the phone was unlocked.
+- A previous locked-screen run reported `No compose hierarchies found in the
+  app`; this is documented as a Compose/device-lock test-environment issue,
+  not an application failure.
+
+Lint review found no errors. The 25 warnings are understood and were not
+blanket-suppressed: guarded API-33 notification permission constants, available
+newer dependency versions, KTX modernization suggestions, a redundant API-26
+check, Compose parameter ordering, the intentionally adb-accessible debug-only
+receiver, the missing explicit launcher icon, and the `allowBackup=false`
+data-extraction guidance. The debug receiver is excluded from release. The
+backup choice remains intentionally local-only; adding data-extraction rules,
+adding a launcher icon, and general warning cleanup are recorded as Phase 8
+follow-ups rather than expanding this verification phase.
+
+Manifest verification found only `POST_NOTIFICATIONS`,
+`RECEIVE_BOOT_COMPLETED`, and `SCHEDULE_EXACT_ALARM`; there is no `INTERNET` or
+`USE_EXACT_ALARM`. The production receivers are not exported; the debug-only
+notification receiver is explicitly exported solely for its documented local
+adb test commands.
+
+No production behavior, Room schema, recurrence calculation, notification
+action semantics, global pause semantics, or `+1 day` semantics changed in
+Phase 7. The full physical checklist in `docs/MANUAL_TESTING.md` remains
+pending, including reboot, clock/time-zone/DST, battery saver/Doze, package
+update, permission combinations, swipe/action combinations, and Force Stop.

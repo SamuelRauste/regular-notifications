@@ -11,15 +11,12 @@ advertisements, or network access.
 
 Phase 6 implementation is complete, with corrective passes for global pause,
 notification-permission recovery, exact-alarm scheduling, edit semantics, and
-recovery/history. Enabled reminders use Room-derived, one-shot AlarmManager
-scheduling, alarm delivery, startup/package-update reconciliation, and
-boot/clock/time-zone recovery. The app can create, view, edit, enable, disable,
-and permanently delete local reminders through a short Compose/Material 3
-interface. Done, Dismiss, +1 day, Tomorrow Seen, and notification-swipe
-handling record actions in Room and reconcile the next schedule. A global,
-read-only History screen shows those actions with current reminder titles.
-Android instrumentation tests compile but connected execution and physical
-recovery testing still need a usable phone or emulator.
+recovery/history. Phase 7 verification and documentation are complete. The
+JVM tests, lint, debug APK/test APK, release APK compilation, and release AAB
+compilation pass. The user also ran all 60 connected instrumentation tests on
+the physical Samsung SM-S931B while it was unlocked. The full physical
+recovery and timing checklist remains pending; see
+`docs/MANUAL_TESTING.md`.
 
 ## Prerequisites
 
@@ -46,6 +43,48 @@ Run from the repository root in PowerShell:
 ```
 
 The debug APK will be under `app/build/outputs/apk/debug/`.
+
+`testDebugUnitTest` is the direct task for the debug JVM suite. It is also run
+by the normal `test` verification task in this project, so running both is
+useful as a named check but does not execute a different unit-test suite.
+
+## Connected instrumentation tests
+
+With an authorized phone or emulator connected, run:
+
+```powershell
+adb devices
+.\gradlew.bat connectedDebugAndroidTest
+```
+
+The device must appear as `device`, not `unauthorized` or `offline`. Compose
+instrumentation needs the device unlocked, the screen on for the short test
+run, and no blocking system dialogs. A locked phone can produce `No compose
+hierarchies found in the app`; that is a test-environment condition, not a
+reason to add lock-screen or wake-lock behavior to the app. The recorded
+physical result for this repository is 60/60 tests passed on Samsung SM-S931B
+when unlocked.
+
+## Release artifacts
+
+The release build type is intentionally usable without committing signing
+credentials:
+
+```powershell
+.\gradlew.bat assembleRelease
+.\gradlew.bat bundleRelease
+```
+
+The local verification outputs are:
+
+- `app/build/outputs/apk/release/app-release-unsigned.apk`
+- `app/build/outputs/bundle/release/app-release.aab`
+
+Both artifacts are unsigned and are not ready for Play distribution. A future
+distribution build must use a keystore and passwords kept outside the
+repository, for example through local Gradle properties or environment
+variables. Never commit a keystore, signing password, or secret properties
+file.
 
 The current project uses minSdk 26, compileSdk/targetSdk 37, Android Gradle
 Plugin 9.2.1, Gradle 9.4.1, built-in Kotlin, and Jetpack Compose Material 3.

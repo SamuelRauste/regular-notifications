@@ -1,3 +1,16 @@
+## Screenshots
+
+### Notifications
+![Notifications](screenshots/notifications.png)
+
+### Reminder list
+![Reminder list](screenshots/list_view.png)
+
+### Edit reminder
+![Edit reminder](screenshots/edit_reminder.png)
+
+
+
 # Regular Notifications
 
 An offline Android reminder app for recurring notifications with Done, Dismiss,

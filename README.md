@@ -1,13 +1,13 @@
 ## Screenshots
 
 ### Notifications
-![Notifications](screenshots/notifications.png)
+![Notifications](screenshots/notifications.jpg)
 
 ### Reminder list
-![Reminder list](screenshots/list_view.png)
+![Reminder list](screenshots/list_view.jpg)
 
 ### Edit reminder
-![Edit reminder](screenshots/edit_reminder.png)
+![Edit reminder](screenshots/edit_reminder.jpg)
 
 
 

@@ -1,14 +1,10 @@
 ## Screenshots
 
-### Notifications
-![Notifications](screenshots/notifications.jpg)
-
-### Reminder list
-![Reminder list](screenshots/list_view.jpg)
-
-### Edit reminder
-![Edit reminder](screenshots/edit_reminder.jpg)
-
+<p align="center">
+  <img src="screenshots/notifications.jpg" width="250" alt="Notifications">
+  <img src="screenshots/list_view.jpg" width="250" alt="Reminder list">
+  <img src="screenshots/edit_reminder.jpg" width="250" alt="Edit reminder">
+</p>
 
 
 # Regular Notifications
